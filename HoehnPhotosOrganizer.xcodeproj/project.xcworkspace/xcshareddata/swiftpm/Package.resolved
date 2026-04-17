@@ -1,0 +1,33 @@
+{
+  "originHash" : "7febe7e14710de64eb8786ec2acb628eafe0d1c72fb6a723ccde62344522d36b",
+  "pins" : [
+    {
+      "identity" : "grdb.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/groue/GRDB.swift",
+      "state" : {
+        "revision" : "36e30a6f1ef10e4194f6af0cff90888526f0c115",
+        "version" : "7.10.0"
+      }
+    },
+    {
+      "identity" : "grdbquery",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/groue/GRDBQuery",
+      "state" : {
+        "revision" : "540dc48e86af2972b4f1815616aa1ed8ac97845a",
+        "version" : "0.11.0"
+      }
+    },
+    {
+      "identity" : "justthebinary",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/r0ml/JustTheBinary.git",
+      "state" : {
+        "revision" : "a3727aeba2d68335c94b3685ece09a4c98e1662d",
+        "version" : "4.12.1"
+      }
+    }
+  ],
+  "version" : 3
+}

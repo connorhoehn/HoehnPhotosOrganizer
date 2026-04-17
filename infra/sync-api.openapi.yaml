@@ -1,0 +1,1498 @@
+# sync-api.openapi.yaml — HoehnPhotos Sync API contract
+#
+# This OpenAPI 3.0 spec is the authoritative boundary document between:
+#   - Swift client (HoehnPhotosOrganizer macOS app) — consumes these endpoints
+#   - Lambda implementation (Wave 2, plan 04-02) — implements these endpoints
+#   - CDK stack (this plan, 04-01) — wires APIGW + Lambda in sync_stack.py
+#
+# Design principles:
+#   - All endpoints are IDEMPOTENT: the same request submitted multiple times
+#     produces the same result. Clients may safely retry on network error.
+#   - Timestamps are always Unix epoch (integer seconds). ISO8601 is NOT used
+#     at the API boundary to avoid timezone ambiguity and string parsing cost.
+#   - Presigned URLs are the ONLY mechanism for S3 data transfer. The Lambda
+#     API generates presigned PUT/GET URLs; clients use them directly.
+#     This keeps S3 credentials server-side and avoids credential sharing.
+#   - Authentication: AWS Cognito user pool JWT verification required on all
+#     endpoints except GET /health and GET /a/{token} (public share links).
+#     Header: Authorization: Bearer <token>
+#   - Rate limits: 1000 req/min per authenticated user (documented; not enforced
+#     until Wave 2 Lambda throttling is configured in API Gateway).
+#   - Error responses: 4xx for client errors (invalid input, not found, conflict),
+#     5xx for server errors. 5xx responses include a `retryable` flag so clients
+#     can implement exponential backoff without guessing.
+
+openapi: 3.0.0
+
+info:
+  title: HoehnPhotos Sync API
+  version: 2.0.0
+  description: |
+    Cloud sync and sharing endpoints for the HoehnPhotosOrganizer macOS app.
+
+    Covers: proxy image upload, editorial thread entry sync, per-photo sync status,
+    catalog restore manifest, curve file management, catalog batch sync (photos,
+    jobs, people, faces, revisions), albums, and shareable album links.
+
+    Implementation status:
+      Wave 1 (04-01): This spec defined. Placeholder Lambda returns 501.
+      Wave 2 (04-02): Lambda functions implement these endpoints.
+      Wave 3 (04-03): Swift SyncClient actor consumes this API.
+      Wave 4 (04-04): Restore flow uses /restore/manifest and /restore/download.
+      Wave 5 (04-08): Catalog batch sync, albums, and share links.
+
+servers:
+  - url: https://sync-api.hoehnphotos.internal/v1
+    description: Production (API Gateway invoke URL from CDK stack output SyncApiEndpoint)
+  - url: http://localhost:3000/v1
+    description: Local testing (Wave 2 SAM local or mock server)
+
+tags:
+  - name: Sync
+    description: Upload and sync assets from device to cloud
+  - name: Catalog
+    description: Batch catalog sync (photos, jobs, people, faces, revisions)
+  - name: Restore
+    description: Download and restore assets from cloud to device
+  - name: Status
+    description: Per-photo sync status queries
+  - name: Albums
+    description: Album management and shareable links
+  - name: Public
+    description: Public endpoints (no auth required)
+
+paths:
+
+  # ── /sync/proxies ──────────────────────────────────────────────────────────
+  # Request a presigned PUT URL for uploading a proxy image to S3.
+  # Proxy images are stored at: proxies/{canonicalId}.jpg
+  # The client calls this endpoint, receives a presigned URL, then PUTs the
+  # JPEG bytes directly to S3 — Lambda never sees the binary data.
+  #
+  # Auth: Cognito JWT required. Header: Authorization: Bearer <token>
+  # Rate limit: 1000 req/min per user
+  /sync/proxies:
+    post:
+      operationId: requestProxyUploadUrl
+      summary: Request presigned PUT URL for proxy image upload
+      tags: [Sync]
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignedUrlRequest'
+            example:
+              canonicalId: "IMG_1234.CR3"
+              contentLength: 1572864
+              checksum: "a3f5bc8e2d1047c9b4e6f3a2c8d9e1b7"
+      responses:
+        '200':
+          description: Presigned PUT URL ready for direct S3 upload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignedUrlResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Asset with identical checksum already exists (no-op, idempotent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExistingAssetResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /sync/threads ──────────────────────────────────────────────────────────
+  # Upload a single thread entry to DynamoDB.
+  # Entries are immutable once written (append-only log).
+  # Idempotent: submitting the same entryId twice is a no-op (DynamoDB
+  # conditional write: only insert if entryId does not exist).
+  #
+  # Auth: Cognito JWT required.
+  /sync/threads:
+    post:
+      operationId: uploadThreadEntry
+      summary: Upload a thread entry (note, AI turn, or print attempt) to DynamoDB
+      tags: [Sync]
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreadEntry'
+            example:
+              threadRootId: "IMG_1234.CR3"
+              entryId: "B8F2A3D1-1234-5678-ABCD-EF0123456789"
+              timestamp: 1710595200
+              type: "note"
+              content: "{\"text\":\"First successful platinum print at 10 minutes\"}"
+              syncedAt: null
+      responses:
+        '200':
+          description: Entry stored in DynamoDB
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entryId:
+                    type: string
+                    format: uuid
+                    description: The entryId that was stored
+                  syncedAt:
+                    type: integer
+                    description: Unix epoch seconds when entry was written to DynamoDB
+                required: [entryId, syncedAt]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Entry with this entryId already exists (no-op, idempotent)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Entry already exists — no update made"
+                  entryId:
+                    type: string
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /sync/threads/{threadRootId} ──────────────────────────────────────────
+  # Fetch all thread entries for a photo since a given timestamp.
+  # Used for incremental sync: client provides its last sync timestamp,
+  # server returns only newer entries.
+  # Response is paginated via nextToken for large threads.
+  #
+  # Auth: Cognito JWT required.
+  /sync/threads/{threadRootId}:
+    get:
+      operationId: getThreadEntries
+      summary: Fetch thread entries for a photo since a given timestamp
+      tags: [Sync]
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: threadRootId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "IMG_1234.CR3"
+          description: Photo canonical_id (partition key)
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Unix epoch seconds — return only entries with timestamp > since
+          example: 1710000000
+        - name: nextToken
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Pagination token from previous response (DynamoDB LastEvaluatedKey, base64-encoded)
+      responses:
+        '200':
+          description: Thread entries for this photo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ThreadEntry'
+                  nextToken:
+                    type: string
+                    nullable: true
+                    description: Pagination token. Null when no more entries.
+                  totalCount:
+                    type: integer
+                    description: Total entry count for this photo (all time, ignoring since filter)
+                required: [entries]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Photo has no thread entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /sync/status/{canonicalId} ────────────────────────────────────────────
+  # Query the cloud sync status for a specific photo.
+  # Returns whether the photo's proxy, threads, and curves are in sync.
+  # Used by LibraryView badge icons.
+  #
+  # Auth: Cognito JWT required.
+  /sync/status/{canonicalId}:
+    get:
+      operationId: getSyncStatus
+      summary: Get cloud sync status for a photo
+      tags: [Status]
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: canonicalId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "IMG_1234.CR3"
+          description: Photo canonical_id (camera-assigned filename)
+      responses:
+        '200':
+          description: Sync status for this photo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoSyncStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Photo not found in cloud (never synced)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /restore/manifest ────────────────────────────────────────────────────
+  # Get the full restore manifest: all proxies, threads, and curve files
+  # that have been synced to the cloud for this user.
+  # Used at the start of a restore flow (Plan 04-04).
+  # Response may be large — paginated by assetType or using nextToken.
+  #
+  # Auth: Cognito JWT required.
+  /restore/manifest:
+    get:
+      operationId: getRestoreManifest
+      summary: Get manifest of all synced assets for restore
+      tags: [Restore]
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: assetType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [proxy, thread, curve, all]
+            default: all
+          description: Filter by asset type. Defaults to all.
+        - name: nextToken
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Pagination token from previous response
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Return only assets synced after this Unix epoch timestamp
+      responses:
+        '200':
+          description: Restore manifest — list of all synced assets by type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestoreManifest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /restore/download ────────────────────────────────────────────────────
+  # Request a presigned GET URL to download a specific asset from S3.
+  # Used during restore to fetch proxy images and curve files.
+  # Thread entries are returned directly by /sync/threads (no S3 roundtrip).
+  #
+  # Auth: Cognito JWT required.
+  /restore/download:
+    post:
+      operationId: requestAssetDownloadUrl
+      summary: Request presigned GET URL for downloading an asset from S3
+      tags: [Restore]
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                s3Key:
+                  type: string
+                  description: S3 object key from restore manifest (e.g. "proxies/IMG_1234.CR3.jpg")
+                  example: "proxies/IMG_1234.CR3.jpg"
+                assetType:
+                  type: string
+                  enum: [proxy, curve]
+                  description: Asset category — determines access validation
+              required: [s3Key, assetType]
+      responses:
+        '200':
+          description: Presigned GET URL ready for direct S3 download
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignedUrlResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Asset not found in S3
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /sync/curves ─────────────────────────────────────────────────────────
+  # Request a presigned PUT URL for uploading a curve file to S3.
+  # Curve files stored at: curves/{photoId}_{attemptId}.{ext}
+  # Supports: .acv, .csv, .lut, .cube (validated server-side in Wave 2)
+  #
+  # Auth: Cognito JWT required.
+  /sync/curves:
+    post:
+      operationId: requestCurveUploadUrl
+      summary: Request presigned PUT URL for curve file upload
+      tags: [Sync]
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                photoId:
+                  type: string
+                  description: Photo canonical_id
+                  example: "IMG_1234.CR3"
+                attemptId:
+                  type: string
+                  format: uuid
+                  description: Print attempt UUID (for filename construction)
+                fileExtension:
+                  type: string
+                  enum: [acv, csv, lut, cube]
+                  description: Curve file format
+                contentLength:
+                  type: integer
+                  description: File size in bytes (must be < 10,485,760 = 10 MB)
+                checksum:
+                  type: string
+                  description: SHA-256 hex digest for deduplication
+              required: [photoId, attemptId, fileExtension, contentLength, checksum]
+      responses:
+        '200':
+          description: Presigned PUT URL and computed S3 key
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PresignedUrlResponse'
+                  - type: object
+                    properties:
+                      s3Key:
+                        type: string
+                        description: Full S3 key for this curve file (store in CurveFileReference)
+                        example: "curves/IMG_1234.CR3_B8F2A3D1-1234.acv"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File too large (> 10 MB)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /sync/catalog-batch ──────────────────────────────────────────────────
+  # Batch upsert catalog items (photos, jobs, people, faces, revisions).
+  # Each item is identified by entityType + entityId. If an item with the
+  # same key exists, it is overwritten (last-writer-wins).
+  # Idempotent: re-submitting the same batch produces the same result.
+  #
+  # Auth: Cognito JWT required.
+  /sync/catalog-batch:
+    post:
+      operationId: batchUpsertCatalogItems
+      summary: Batch upsert catalog items (photos, jobs, people, faces, revisions)
+      tags: [Catalog]
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogBatchRequest'
+            example:
+              items:
+                - entityType: "PHOTO"
+                  entityId: "A1B2C3D4-5678-90AB-CDEF-1234567890AB"
+                  data:
+                    canonicalId: "IMG_1234.CR3"
+                    captureDate: 1710595200
+                    rating: 5
+                - entityType: "PERSON"
+                  entityId: "E5F6A7B8-1234-5678-ABCD-EF0123456789"
+                  data:
+                    name: "Jane Doe"
+      responses:
+        '200':
+          description: Batch upsert completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /sync/catalog ────────────────────────────────────────────────────────
+  # Incremental catalog pull. Returns catalog items modified since a given
+  # timestamp, optionally filtered by entityType. Paginated via nextToken.
+  #
+  # Auth: Cognito JWT required.
+  /sync/catalog:
+    get:
+      operationId: getCatalogItems
+      summary: Incremental catalog pull — fetch items modified since a timestamp
+      tags: [Catalog]
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Unix epoch seconds — return only items modified after this timestamp
+          example: 1710000000
+        - name: entityType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PHOTO, JOB, PERSON, FACE, REVISION]
+          description: Filter by entity type. Omit to return all types.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+          description: Maximum number of items to return per page (default 100)
+        - name: nextToken
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Pagination token from previous response
+      responses:
+        '200':
+          description: Catalog items matching the query
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CatalogItem'
+                  nextToken:
+                    type: string
+                    nullable: true
+                    description: Pagination token. Null when no more items.
+                  syncTimestamp:
+                    type: integer
+                    format: int64
+                    description: Server timestamp for this response — use as `since` for next pull
+                required: [items, syncTimestamp]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /sync/catalog/{entityType}/{entityId} ────────────────────────────────
+  # Soft-delete a catalog item. The item is marked as deleted but retained
+  # for sync conflict resolution. Deleted items appear in incremental pulls
+  # with a `deleted: true` flag so other devices can converge.
+  #
+  # Auth: Cognito JWT required.
+  /sync/catalog/{entityType}/{entityId}:
+    delete:
+      operationId: deleteCatalogItem
+      summary: Soft-delete a catalog item
+      tags: [Catalog]
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: entityType
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [PHOTO, JOB, PERSON, FACE, REVISION]
+          description: Entity type to delete
+        - name: entityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Entity UUID to delete
+      responses:
+        '200':
+          description: Item soft-deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    example: true
+                required: [deleted]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /albums ──────────────────────────────────────────────────────────────
+  # Create a new album.
+  #
+  # Auth: Cognito JWT required.
+  /albums:
+    post:
+      operationId: createAlbum
+      summary: Create a new album
+      tags: [Albums]
+      security:
+        - cognitoAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: Album display title
+                  example: "Yellowstone 2026"
+                description:
+                  type: string
+                  nullable: true
+                  description: Optional album description
+                  example: "Spring trip to Yellowstone National Park"
+                coverPhotoId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: Photo UUID to use as cover image
+                sortMode:
+                  type: string
+                  enum: [manual, date_asc, date_desc]
+                  default: manual
+                  description: How photos are sorted within the album
+              required: [title]
+      responses:
+        '201':
+          description: Album created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  albumId:
+                    type: string
+                    format: uuid
+                    description: Newly created album UUID
+                required: [albumId]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /albums/{albumId} ────────────────────────────────────────────────────
+  # Update album metadata (title, description, cover photo, sort mode).
+  #
+  # Auth: Cognito JWT required.
+  /albums/{albumId}:
+    put:
+      operationId: updateAlbum
+      summary: Update album metadata
+      tags: [Albums]
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: albumId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Album UUID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Album'
+      responses:
+        '200':
+          description: Album updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Album'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Album not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /albums/{albumId}/photos ─────────────────────────────────────────────
+  # List photos in an album (paginated) or add photos to an album.
+  #
+  # Auth: Cognito JWT required.
+  /albums/{albumId}/photos:
+    get:
+      operationId: listAlbumPhotos
+      summary: List photos in an album (paginated)
+      tags: [Albums]
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: albumId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Album UUID
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+          description: Maximum number of photos to return per page (default 100)
+        - name: nextToken
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Pagination token from previous response
+      responses:
+        '200':
+          description: Photos in the album
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  photos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlbumPhoto'
+                  nextToken:
+                    type: string
+                    nullable: true
+                    description: Pagination token. Null when no more photos.
+                required: [photos]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Album not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      operationId: addPhotosToAlbum
+      summary: Add photos to an album
+      tags: [Albums]
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: albumId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Album UUID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                photos:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      photoId:
+                        type: string
+                        format: uuid
+                        description: Photo UUID to add
+                      caption:
+                        type: string
+                        nullable: true
+                        description: Optional per-album caption for this photo
+                      sortPosition:
+                        type: integer
+                        nullable: true
+                        description: Manual sort position (used when sortMode=manual)
+                    required: [photoId]
+              required: [photos]
+            example:
+              photos:
+                - photoId: "A1B2C3D4-5678-90AB-CDEF-1234567890AB"
+                  caption: "Old Faithful at sunset"
+                  sortPosition: 1
+                - photoId: "B2C3D4E5-6789-01BC-DEF0-2345678901BC"
+                  sortPosition: 2
+      responses:
+        '200':
+          description: Photos added to album
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  addedCount:
+                    type: integer
+                    description: Number of photos added
+                required: [addedCount]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Album not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /albums/{albumId}/photos/{photoId} ───────────────────────────────────
+  # Remove a photo from an album. Does not delete the photo itself.
+  #
+  # Auth: Cognito JWT required.
+  /albums/{albumId}/photos/{photoId}:
+    delete:
+      operationId: removePhotoFromAlbum
+      summary: Remove a photo from an album
+      tags: [Albums]
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: albumId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Album UUID
+        - name: photoId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Photo UUID to remove
+      responses:
+        '200':
+          description: Photo removed from album
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    example: true
+                required: [deleted]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Album or photo not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /albums/{albumId}/links ──────────────────────────────────────────────
+  # Create or deactivate share links for an album.
+  # Share links generate a public URL that can be viewed without auth.
+  #
+  # Auth: Cognito JWT required.
+  /albums/{albumId}/links:
+    post:
+      operationId: createShareLink
+      summary: Create a shareable link for an album
+      tags: [Albums]
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: albumId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Album UUID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accessMode:
+                  type: string
+                  enum: [public, password]
+                  description: Whether the link is fully public or requires a password
+                password:
+                  type: string
+                  nullable: true
+                  description: Required when accessMode=password. Min 6 characters.
+                expiresAt:
+                  type: integer
+                  format: int64
+                  nullable: true
+                  description: Unix epoch seconds when this link expires. Null = never expires.
+              required: [accessMode]
+            example:
+              accessMode: "public"
+              expiresAt: 1718000000
+      responses:
+        '201':
+          description: Share link created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareLink'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Album not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /albums/{albumId}/links/{token} ──────────────────────────────────────
+  # Deactivate a share link. The token becomes invalid immediately.
+  #
+  # Auth: Cognito JWT required.
+  /albums/{albumId}/links/{token}:
+    delete:
+      operationId: deactivateShareLink
+      summary: Deactivate a share link
+      tags: [Albums]
+      security:
+        - cognitoAuth: []
+      parameters:
+        - name: albumId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Album UUID
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Share link token to deactivate
+      responses:
+        '200':
+          description: Share link deactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    example: true
+                required: [deleted]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Album or share link not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  # ── /a/{token} ───────────────────────────────────────────────────────────
+  # PUBLIC endpoint — no auth required.
+  # View a shared album via its share link token. Returns an album manifest
+  # with photo metadata and presigned GET URLs for proxy images.
+  # If the link has accessMode=password, the password must be provided
+  # in the X-Album-Password header.
+  /a/{token}:
+    get:
+      operationId: viewSharedAlbum
+      summary: View a shared album (public, no auth required)
+      tags: [Public]
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Share link token
+        - name: X-Album-Password
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Password for password-protected share links
+      responses:
+        '200':
+          description: Album manifest with photo URLs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumManifest'
+        '401':
+          description: Password required or incorrect
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Share link not found or expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Share link has been deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+# ── Components ───────────────────────────────────────────────────────────────
+
+components:
+
+  securitySchemes:
+    cognitoAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: AWS Cognito user pool JWT token. Header format — Authorization: Bearer <token>
+
+  schemas:
+
+    # ThreadEntry — core model for per-photo editorial threads.
+    # Matches SyncThreadEntry in SyncModels.swift.
+    # DynamoDB key: PK=threadRootId, SK="<timestamp>#<entryId>"
+    ThreadEntry:
+      type: object
+      properties:
+        threadRootId:
+          type: string
+          description: Photo canonical_id — DynamoDB partition key
+          example: "IMG_1234.CR3"
+        entryId:
+          type: string
+          format: uuid
+          description: UUID — part of sort key; globally unique
+          example: "B8F2A3D1-1234-5678-ABCD-EF0123456789"
+        timestamp:
+          type: integer
+          format: int64
+          description: Unix epoch seconds — sort key prefix; chronological ordering
+          example: 1710595200
+        type:
+          type: string
+          enum: [note, ai_turn, print_attempt]
+          description: Entry kind. Matches SyncThreadEntry.EntryType raw values.
+        content:
+          type: string
+          description: JSON-serialized entry payload (varies by type)
+          example: "{\"text\":\"Good print — 10 min at 68°F\"}"
+        syncedAt:
+          type: integer
+          format: int64
+          nullable: true
+          description: Unix epoch seconds when written to DynamoDB. Null = not yet synced.
+      required: [threadRootId, entryId, timestamp, type, content]
+
+    # PresignedUrlRequest — parameters for requesting a presigned S3 URL.
+    PresignedUrlRequest:
+      type: object
+      properties:
+        canonicalId:
+          type: string
+          description: Photo canonical_id (for proxies) or file identifier (for curves)
+          example: "IMG_1234.CR3"
+        contentLength:
+          type: integer
+          description: Expected byte size of the asset to be uploaded
+          example: 1572864
+        checksum:
+          type: string
+          description: SHA-256 hex digest for deduplication check before issuing URL
+          example: "a3f5bc8e2d1047c9b4e6f3a2c8d9e1b7"
+      required: [canonicalId, contentLength, checksum]
+
+    # PresignedUrlResponse — returned when a presigned URL is issued.
+    PresignedUrlResponse:
+      type: object
+      properties:
+        presignedUrl:
+          type: string
+          format: uri
+          description: Presigned S3 PUT or GET URL. Valid for expiresIn seconds.
+          example: "https://s3.amazonaws.com/bucket/proxies/IMG_1234.CR3.jpg?X-Amz-..."
+        expiresIn:
+          type: integer
+          description: Seconds until URL expires (default 900 = 15 minutes)
+          example: 900
+        s3Key:
+          type: string
+          description: S3 object key (for client to store in local DB for future reference)
+          example: "proxies/IMG_1234.CR3.jpg"
+      required: [presignedUrl, expiresIn, s3Key]
+
+    # ExistingAssetResponse — returned when checksum matches an already-uploaded asset.
+    ExistingAssetResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Asset already exists with this checksum — no upload needed"
+        s3Key:
+          type: string
+          description: Existing S3 object key
+        syncedAt:
+          type: integer
+          description: When the existing asset was originally synced
+
+    # PhotoSyncStatus — per-photo cloud sync summary.
+    PhotoSyncStatus:
+      type: object
+      properties:
+        canonicalId:
+          type: string
+          description: Photo canonical_id
+        status:
+          type: string
+          enum: [localOnly, syncing, synced, error]
+          description: Overall sync status. Matches SyncStatus cases in SyncModels.swift.
+        proxyStatus:
+          type: string
+          enum: [localOnly, synced, missing]
+          description: Whether this photo's proxy image is in S3
+        threadCount:
+          type: integer
+          description: Number of thread entries stored in DynamoDB for this photo
+        lastSyncTime:
+          type: integer
+          format: int64
+          nullable: true
+          description: Unix epoch seconds of most recent successful sync. Null if never synced.
+        errorReason:
+          type: string
+          nullable: true
+          description: Human-readable error description. Present only when status=error.
+      required: [canonicalId, status]
+
+    # RestoreManifest — full inventory of cloud assets for restore flow.
+    RestoreManifest:
+      type: object
+      properties:
+        proxies:
+          type: array
+          description: All synced proxy images
+          items:
+            type: object
+            properties:
+              canonicalId:
+                type: string
+                example: "IMG_1234.CR3"
+              s3Key:
+                type: string
+                example: "proxies/IMG_1234.CR3.jpg"
+              versionId:
+                type: string
+                description: S3 version ID (latest by default)
+              syncedAt:
+                type: integer
+                description: Unix epoch seconds when proxy was synced
+            required: [canonicalId, s3Key]
+        threads:
+          type: array
+          description: All synced thread entries (flat list across all photos)
+          items:
+            $ref: '#/components/schemas/ThreadEntry'
+        curves:
+          type: array
+          description: All synced curve files
+          items:
+            type: object
+            properties:
+              photoId:
+                type: string
+                example: "IMG_1234.CR3"
+              attemptId:
+                type: string
+                format: uuid
+              s3Key:
+                type: string
+                example: "curves/IMG_1234.CR3_B8F2A3D1.acv"
+              syncedAt:
+                type: integer
+            required: [photoId, attemptId, s3Key]
+        generatedAt:
+          type: integer
+          format: int64
+          description: Unix epoch seconds when this manifest was generated
+        nextToken:
+          type: string
+          nullable: true
+          description: Pagination token. Null when manifest is complete.
+        totalPhotos:
+          type: integer
+          description: Total count of photos with at least one synced asset
+      required: [proxies, threads, curves, generatedAt]
+
+    # CatalogItem — a single entity in the catalog sync system.
+    # Generic wrapper: entityType discriminates the shape of `data`.
+    CatalogItem:
+      type: object
+      properties:
+        entityType:
+          type: string
+          enum: [PHOTO, JOB, PERSON, FACE, REVISION]
+          description: Catalog entity type
+        entityId:
+          type: string
+          format: uuid
+          description: Entity UUID — unique within its entityType
+        data:
+          type: object
+          additionalProperties: true
+          description: Entity-specific payload. Shape varies by entityType.
+        updatedAt:
+          type: integer
+          format: int64
+          description: Unix epoch seconds when this item was last modified server-side
+        deleted:
+          type: boolean
+          default: false
+          description: True if this item has been soft-deleted
+      required: [entityType, entityId, data]
+
+    # CatalogBatchRequest — request body for POST /sync/catalog-batch.
+    CatalogBatchRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              entityType:
+                type: string
+                enum: [PHOTO, JOB, PERSON, FACE, REVISION]
+                description: Catalog entity type
+              entityId:
+                type: string
+                format: uuid
+                description: Entity UUID
+              data:
+                type: object
+                additionalProperties: true
+                description: Entity-specific payload
+            required: [entityType, entityId, data]
+          description: Array of catalog items to upsert (max 100 per batch)
+      required: [items]
+
+    # CatalogBatchResponse — response from POST /sync/catalog-batch.
+    CatalogBatchResponse:
+      type: object
+      properties:
+        syncTimestamp:
+          type: integer
+          format: int64
+          description: Server timestamp after batch write — use as `since` for next pull
+        writtenCount:
+          type: integer
+          description: Number of items successfully written
+      required: [syncTimestamp, writtenCount]
+
+    # Album — album metadata.
+    Album:
+      type: object
+      properties:
+        albumId:
+          type: string
+          format: uuid
+          description: Album UUID
+        title:
+          type: string
+          description: Album display title
+          example: "Yellowstone 2026"
+        description:
+          type: string
+          nullable: true
+          description: Optional album description
+        coverPhotoId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Photo UUID used as cover image
+        sortMode:
+          type: string
+          enum: [manual, date_asc, date_desc]
+          description: Photo sort order within the album
+        photoCount:
+          type: integer
+          description: Number of photos in the album
+        createdAt:
+          type: integer
+          format: int64
+          description: Unix epoch seconds when album was created
+        updatedAt:
+          type: integer
+          format: int64
+          description: Unix epoch seconds when album was last modified
+      required: [albumId, title, sortMode]
+
+    # AlbumPhoto — a photo's membership in an album.
+    AlbumPhoto:
+      type: object
+      properties:
+        photoId:
+          type: string
+          format: uuid
+          description: Photo UUID
+        caption:
+          type: string
+          nullable: true
+          description: Per-album caption for this photo
+        sortPosition:
+          type: integer
+          description: Sort position within the album (used when sortMode=manual)
+        addedAt:
+          type: integer
+          format: int64
+          description: Unix epoch seconds when photo was added to album
+        proxyUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Presigned GET URL for the photo's proxy image (included in listings)
+      required: [photoId, sortPosition]
+
+    # ShareLink — a shareable link for an album.
+    ShareLink:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Unique share link token
+          example: "xK9mP2vL"
+        url:
+          type: string
+          format: uri
+          description: Full public URL for the shared album
+          example: "https://photos.hoehn.com/a/xK9mP2vL"
+        accessMode:
+          type: string
+          enum: [public, password]
+          description: Access control mode
+        expiresAt:
+          type: integer
+          format: int64
+          nullable: true
+          description: Unix epoch seconds when link expires. Null = never.
+        createdAt:
+          type: integer
+          format: int64
+          description: Unix epoch seconds when link was created
+        active:
+          type: boolean
+          description: Whether this link is currently active
+      required: [token, url, accessMode, active]
+
+    # AlbumManifest — public view of a shared album (returned by GET /a/{token}).
+    AlbumManifest:
+      type: object
+      properties:
+        albumId:
+          type: string
+          format: uuid
+          description: Album UUID
+        title:
+          type: string
+          description: Album display title
+        description:
+          type: string
+          nullable: true
+          description: Album description
+        photos:
+          type: array
+          description: Photos in the album with presigned proxy URLs
+          items:
+            type: object
+            properties:
+              photoId:
+                type: string
+                format: uuid
+              caption:
+                type: string
+                nullable: true
+              proxyUrl:
+                type: string
+                format: uri
+                description: Presigned GET URL for proxy image (time-limited)
+              sortPosition:
+                type: integer
+            required: [photoId, proxyUrl, sortPosition]
+        photoCount:
+          type: integer
+          description: Total number of photos in the album
+        generatedAt:
+          type: integer
+          format: int64
+          description: Unix epoch seconds when this manifest was generated
+      required: [albumId, title, photos, photoCount, generatedAt]
+
+    # ErrorResponse — standard error body for 4xx/5xx responses.
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code (e.g. "invalid_canonical_id")
+        message:
+          type: string
+          description: Human-readable error description
+        retryable:
+          type: boolean
+          description: True if the client should retry after a backoff. Always false for 4xx.
+        requestId:
+          type: string
+          description: Lambda request ID for log correlation
+      required: [error, message, retryable]
+
+  responses:
+
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "invalid_canonical_id"
+            message: "canonicalId must be a non-empty string"
+            retryable: false
+
+    Unauthorized:
+      description: Missing or invalid Cognito JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "unauthorized"
+            message: "Authorization header missing or token expired"
+            retryable: false
+
+    ServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "internal_error"
+            message: "An unexpected error occurred"
+            retryable: true
+            requestId: "abc123-lambda-request-id"

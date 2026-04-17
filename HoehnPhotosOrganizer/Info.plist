@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>HoehnPhotos uses the local network to sync your catalog with the iOS companion app.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_hoehnphoto._tcp</string>
+	</array>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>HoehnPhotos uses speech recognition to let you search your library by voice.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>HoehnPhotos needs microphone access for voice search.</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Person Drag Item</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.hoehnphotos.person-drag-item</string>
+			<key>UTTypeTagSpecification</key>
+			<dict/>
+		</dict>
+	</array>
+</dict>
+</plist>

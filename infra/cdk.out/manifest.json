@@ -1,0 +1,845 @@
+{
+  "version": "36.0.0",
+  "artifacts": {
+    "HoehnPhotosSync.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "HoehnPhotosSync.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "HoehnPhotosSync": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://unknown-account/unknown-region",
+      "properties": {
+        "templateFile": "HoehnPhotosSync.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/ef074daa5d2f54fbe47b5b0edd3cc88674752f89294eab89e8792b98bd427ea2.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "HoehnPhotosSync.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-${AWS::Region}",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "HoehnPhotosSync.assets"
+      ],
+      "metadata": {
+        "/HoehnPhotosSync/PhotoStorage/PhotoSyncBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PhotoStoragePhotoSyncBucket8F1C123C"
+          }
+        ],
+        "/HoehnPhotosSync/PhotoStorage/PhotoSyncBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PhotoStoragePhotoSyncBucketPolicyF9E0F9D0"
+          }
+        ],
+        "/HoehnPhotosSync/ThreadStorage/ThreadEntryTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ThreadStorageThreadEntryTable583E8F3A"
+          }
+        ],
+        "/HoehnPhotosSync/Auth/AutoConfirmUser/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthAutoConfirmUserServiceRole4DCB0A40"
+          }
+        ],
+        "/HoehnPhotosSync/Auth/AutoConfirmUser/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthAutoConfirmUser98088961"
+          }
+        ],
+        "/HoehnPhotosSync/Auth/UserPool/PreSignUpCognito": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthUserPoolPreSignUpCognito52504672"
+          }
+        ],
+        "/HoehnPhotosSync/Auth/UserPool/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthUserPool8115E87F"
+          }
+        ],
+        "/HoehnPhotosSync/Auth/UserPool/AppClient/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthUserPoolAppClient1D18298A"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogStorage/CatalogTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogStorageCatalogTableFB61BB55"
+          }
+        ],
+        "/HoehnPhotosSync/AlbumStorage/AlbumsTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AlbumStorageAlbumsTable6077DEC6"
+          }
+        ],
+        "/HoehnPhotosSync/AlbumStorage/ShareLinksTable/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AlbumStorageShareLinksTableA670D7AD"
+          }
+        ],
+        "/HoehnPhotosSync/PresignedUrlFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PresignedUrlFunctionServiceRole30C56AA3"
+          }
+        ],
+        "/HoehnPhotosSync/PresignedUrlFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PresignedUrlFunctionServiceRoleDefaultPolicyDE7C0755"
+          }
+        ],
+        "/HoehnPhotosSync/PresignedUrlFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PresignedUrlFunction7EEE7292"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogExportFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogExportFunctionServiceRole5EE5A0BA"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogExportFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogExportFunctionServiceRoleDefaultPolicy1BA152E9"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogExportFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogExportFunctionE2B4DD85"
+          }
+        ],
+        "/HoehnPhotosSync/ThreadSyncFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ThreadSyncFunctionServiceRoleC53B0C86"
+          }
+        ],
+        "/HoehnPhotosSync/ThreadSyncFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ThreadSyncFunctionServiceRoleDefaultPolicyE8E814BE"
+          }
+        ],
+        "/HoehnPhotosSync/ThreadSyncFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ThreadSyncFunctionFA254DC2"
+          }
+        ],
+        "/HoehnPhotosSync/ThreadQueryFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ThreadQueryFunctionServiceRoleD674D761"
+          }
+        ],
+        "/HoehnPhotosSync/ThreadQueryFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ThreadQueryFunctionServiceRoleDefaultPolicy5271727C"
+          }
+        ],
+        "/HoehnPhotosSync/ThreadQueryFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ThreadQueryFunction5C19B31F"
+          }
+        ],
+        "/HoehnPhotosSync/SyncStatusFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncStatusFunctionServiceRole78FD54F6"
+          }
+        ],
+        "/HoehnPhotosSync/SyncStatusFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncStatusFunctionServiceRoleDefaultPolicy95CCB8D0"
+          }
+        ],
+        "/HoehnPhotosSync/SyncStatusFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncStatusFunction62E74C06"
+          }
+        ],
+        "/HoehnPhotosSync/RestoreManifestFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RestoreManifestFunctionServiceRole302E5D5F"
+          }
+        ],
+        "/HoehnPhotosSync/RestoreManifestFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RestoreManifestFunctionServiceRoleDefaultPolicy4D3F0131"
+          }
+        ],
+        "/HoehnPhotosSync/RestoreManifestFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RestoreManifestFunctionD497F945"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogSyncFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogSyncFunctionServiceRoleE95C8A82"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogSyncFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogSyncFunctionServiceRoleDefaultPolicyB9CBCA6A"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogSyncFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogSyncFunctionD657025B"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogQueryFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogQueryFunctionServiceRole9EB94E2F"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogQueryFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogQueryFunctionServiceRoleDefaultPolicyCB70C3BF"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogQueryFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogQueryFunctionEC7E8BD9"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogDeleteFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogDeleteFunctionServiceRole4DC7B567"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogDeleteFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogDeleteFunctionServiceRoleDefaultPolicy36CF5FE4"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogDeleteFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogDeleteFunction64F9ECCB"
+          }
+        ],
+        "/HoehnPhotosSync/AlbumFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AlbumFunctionServiceRole2AFC4A10"
+          }
+        ],
+        "/HoehnPhotosSync/AlbumFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AlbumFunctionServiceRoleDefaultPolicy9CCF996F"
+          }
+        ],
+        "/HoehnPhotosSync/AlbumFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AlbumFunctionC7C8180F"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApi96088250"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/CloudWatchRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApiCloudWatchRoleE80DDF7C"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Account": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApiAccount6691C425"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Deployment/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApiDeploymentD9DDDFE7bb42cae946764309a91b1c78ebdb53db"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/DeploymentStage.v1/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApiDeploymentStagev12D30E00F"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Endpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApiEndpointE48AE9EB"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/health/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApihealthCFE1BE00"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/health/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApihealthGET24C11D05"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncEA751BD4"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/presign/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncpresign7168A415"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/presign/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..sync.presign": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncpresignPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTsyncpresign20F46429"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/presign/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..sync.presign": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncpresignPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTsyncpresign4A572C03"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/presign/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncpresignPOST7A1ED15E"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalog437C6DF0"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..sync.catalog": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTsynccatalog6CC7D4CB"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..sync.catalog": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTsynccatalogDB326964"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogPOSTA5A25844"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog/GET/ApiPermission.HoehnPhotosSyncSyncApi18496724.GET..sync.catalog": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogGETApiPermissionHoehnPhotosSyncSyncApi18496724GETsynccatalog99A82AD7"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog/GET/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.GET..sync.catalog": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogGETApiPermissionTestHoehnPhotosSyncSyncApi18496724GETsynccatalog223B6F08"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogGET76F0C2EA"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog/{entityType}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogentityType763ABBA2"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog/{entityType}/{entityId}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogentityTypeentityIdABFB4946"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog/{entityType}/{entityId}/DELETE/ApiPermission.HoehnPhotosSyncSyncApi18496724.DELETE..sync.catalog.{entityType}.{entityId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogentityTypeentityIdDELETEApiPermissionHoehnPhotosSyncSyncApi18496724DELETEsynccatalogentityTypeentityIdE9BA46B8"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog/{entityType}/{entityId}/DELETE/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.DELETE..sync.catalog.{entityType}.{entityId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogentityTypeentityIdDELETEApiPermissionTestHoehnPhotosSyncSyncApi18496724DELETEsynccatalogentityTypeentityId95031BCC"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog/{entityType}/{entityId}/DELETE/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogentityTypeentityIdDELETE33952EBC"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog-batch/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogbatch3CA4E7CA"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog-batch/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..sync.catalog-batch": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogbatchPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTsynccatalogbatch7DAF7606"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog-batch/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..sync.catalog-batch": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogbatchPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTsynccatalogbatch99E4C577"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/catalog-batch/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisynccatalogbatchPOST84CF4A3E"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/threads/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncthreads01505589"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/threads/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..sync.threads": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncthreadsPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTsyncthreads644ED54F"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/threads/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..sync.threads": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncthreadsPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTsyncthreadsF0050DEF"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/threads/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncthreadsPOSTDBF34528"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/threads/{threadRootId}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncthreadsthreadRootId9B66D559"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/threads/{threadRootId}/GET/ApiPermission.HoehnPhotosSyncSyncApi18496724.GET..sync.threads.{threadRootId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncthreadsthreadRootIdGETApiPermissionHoehnPhotosSyncSyncApi18496724GETsyncthreadsthreadRootId8CA27B71"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/threads/{threadRootId}/GET/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.GET..sync.threads.{threadRootId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncthreadsthreadRootIdGETApiPermissionTestHoehnPhotosSyncSyncApi18496724GETsyncthreadsthreadRootId860603A0"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/threads/{threadRootId}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncthreadsthreadRootIdGET15339F98"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/status/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncstatusD8CD5921"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/status/{canonicalId}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncstatuscanonicalId0966215E"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/status/{canonicalId}/GET/ApiPermission.HoehnPhotosSyncSyncApi18496724.GET..sync.status.{canonicalId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncstatuscanonicalIdGETApiPermissionHoehnPhotosSyncSyncApi18496724GETsyncstatuscanonicalId0301CA4B"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/status/{canonicalId}/GET/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.GET..sync.status.{canonicalId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncstatuscanonicalIdGETApiPermissionTestHoehnPhotosSyncSyncApi18496724GETsyncstatuscanonicalId34137538"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/sync/status/{canonicalId}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApisyncstatuscanonicalIdGETA6D79C37"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/restore/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApirestore5A0CA5AE"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/restore/manifest/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApirestoremanifestD0BF8D8A"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/restore/manifest/GET/ApiPermission.HoehnPhotosSyncSyncApi18496724.GET..restore.manifest": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApirestoremanifestGETApiPermissionHoehnPhotosSyncSyncApi18496724GETrestoremanifestB569D6F3"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/restore/manifest/GET/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.GET..restore.manifest": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApirestoremanifestGETApiPermissionTestHoehnPhotosSyncSyncApi18496724GETrestoremanifest853C6963"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/restore/manifest/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApirestoremanifestGET28A96CDE"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsCD759167"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..albums": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTalbums55384779"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..albums": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTalbums16AB20A9"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsPOST1807758F"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdE010A991"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/PUT/ApiPermission.HoehnPhotosSyncSyncApi18496724.PUT..albums.{albumId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdPUTApiPermissionHoehnPhotosSyncSyncApi18496724PUTalbumsalbumId2450F807"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/PUT/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.PUT..albums.{albumId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdPUTApiPermissionTestHoehnPhotosSyncSyncApi18496724PUTalbumsalbumIdD247F04D"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/PUT/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdPUTBD775B9E"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdphotosE0B9FA5A"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/GET/ApiPermission.HoehnPhotosSyncSyncApi18496724.GET..albums.{albumId}.photos": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdphotosGETApiPermissionHoehnPhotosSyncSyncApi18496724GETalbumsalbumIdphotosE7467FAD"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/GET/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.GET..albums.{albumId}.photos": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdphotosGETApiPermissionTestHoehnPhotosSyncSyncApi18496724GETalbumsalbumIdphotos44FE6F3F"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdphotosGET98FA7654"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..albums.{albumId}.photos": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdphotosPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTalbumsalbumIdphotos063243C0"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..albums.{albumId}.photos": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdphotosPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTalbumsalbumIdphotos5C8C389A"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdphotosPOST8C11DA47"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/{photoId}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdphotosphotoId616766F5"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/{photoId}/DELETE/ApiPermission.HoehnPhotosSyncSyncApi18496724.DELETE..albums.{albumId}.photos.{photoId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdphotosphotoIdDELETEApiPermissionHoehnPhotosSyncSyncApi18496724DELETEalbumsalbumIdphotosphotoId933345C1"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/{photoId}/DELETE/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.DELETE..albums.{albumId}.photos.{photoId}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdphotosphotoIdDELETEApiPermissionTestHoehnPhotosSyncSyncApi18496724DELETEalbumsalbumIdphotosphotoIdA32F42ED"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/{photoId}/DELETE/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdphotosphotoIdDELETED9E6D143"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdlinks0F8F30FE"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..albums.{albumId}.links": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdlinksPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTalbumsalbumIdlinks2890B25D"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..albums.{albumId}.links": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdlinksPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTalbumsalbumIdlinks65BDD927"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdlinksPOST8FA1C878"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/{token}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdlinkstoken323CAC44"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/{token}/DELETE/ApiPermission.HoehnPhotosSyncSyncApi18496724.DELETE..albums.{albumId}.links.{token}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdlinkstokenDELETEApiPermissionHoehnPhotosSyncSyncApi18496724DELETEalbumsalbumIdlinkstokenEC434197"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/{token}/DELETE/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.DELETE..albums.{albumId}.links.{token}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdlinkstokenDELETEApiPermissionTestHoehnPhotosSyncSyncApi18496724DELETEalbumsalbumIdlinkstokenD7D0E7FE"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/{token}/DELETE/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApialbumsalbumIdlinkstokenDELETEC7578415"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/a/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApiaE184ED02"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/a/{token}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApiatokenAC7C49FC"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/a/{token}/GET/ApiPermission.HoehnPhotosSyncSyncApi18496724.GET..a.{token}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApiatokenGETApiPermissionHoehnPhotosSyncSyncApi18496724GETatoken5851B969"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/a/{token}/GET/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.GET..a.{token}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApiatokenGETApiPermissionTestHoehnPhotosSyncSyncApi18496724GETatoken7D21B759"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApi/Default/a/{token}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApiatokenGET90A5C988"
+          }
+        ],
+        "/HoehnPhotosSync/CognitoAuthorizer/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CognitoAuthorizerF3215DBC"
+          }
+        ],
+        "/HoehnPhotosSync/PhotoSyncBucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PhotoSyncBucketName"
+          }
+        ],
+        "/HoehnPhotosSync/ThreadEntryTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ThreadEntryTableName"
+          }
+        ],
+        "/HoehnPhotosSync/CatalogTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CatalogTableName"
+          }
+        ],
+        "/HoehnPhotosSync/AlbumsTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AlbumsTableName"
+          }
+        ],
+        "/HoehnPhotosSync/ShareLinksTableName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ShareLinksTableName"
+          }
+        ],
+        "/HoehnPhotosSync/SyncApiEndpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SyncApiEndpoint"
+          }
+        ],
+        "/HoehnPhotosSync/UserPoolId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolId"
+          }
+        ],
+        "/HoehnPhotosSync/UserPoolClientId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolClientId"
+          }
+        ],
+        "/HoehnPhotosSync/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/HoehnPhotosSync/CDKMetadata/Condition": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadataAvailable"
+          }
+        ],
+        "/HoehnPhotosSync/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/HoehnPhotosSync/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "HoehnPhotosSync"
+    },
+    "Tree": {
+      "type": "cdk:tree",
+      "properties": {
+        "file": "tree.json"
+      }
+    }
+  }
+}

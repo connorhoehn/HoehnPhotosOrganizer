@@ -1,0 +1,1458 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA000001000000000000006A /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001000000000000003A /* GRDB */; };
+		AA000001000000000000007A /* GRDBQuery in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001000000000000004A /* GRDBQuery */; };
+		AA000001000000000000008A /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001000000000000005A /* GRDB */; };
+		D28A797F2F6994790094E517 /* FilmStripDetector.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = D28A797E2F6994790094E517 /* FilmStripDetector.mlpackage */; };
+		D28A82C22F6A3F020094E517 /* MobileCLIPImageEncoder.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = D28A82C02F6A3F020094E517 /* MobileCLIPImageEncoder.mlpackage */; };
+		D28A82C32F6A3F020094E517 /* MobileCLIPTextEncoder.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = D28A82C12F6A3F020094E517 /* MobileCLIPTextEncoder.mlpackage */; };
+		D2C61DF42F7C0CC80091CDBD /* OpenCV in Frameworks */ = {isa = PBXBuildFile; productRef = D2C61DF32F7C0CC80091CDBD /* OpenCV */; };
+		D2C61E1E2F7C65FC0091CDBD /* OpenCL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D2C61E1D2F7C65FC0091CDBD /* OpenCL.framework */; };
+		D2C9CD192F6AFDDF001623CE /* OrientationDetector_i8.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = D2C9CD182F6AFDDF001623CE /* OrientationDetector_i8.mlpackage */; };
+		D2E89EB52F78992D00EF292D /* HoehnPhotosCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D2E89EAA2F78992D00EF292D /* HoehnPhotosCore.framework */; };
+		D2E89ECC2F78999000EF292D /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D2E89ECB2F78999000EF292D /* GRDB */; };
+		D2E89ECE2F78999000EF292D /* GRDBQuery in Frameworks */ = {isa = PBXBuildFile; productRef = D2E89ECD2F78999000EF292D /* GRDBQuery */; };
+		D2E89F112F789A6300EF292D /* HoehnPhotosCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D2E89EAA2F78992D00EF292D /* HoehnPhotosCore.framework */; };
+		D2E89F122F789A6300EF292D /* HoehnPhotosCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = D2E89EAA2F78992D00EF292D /* HoehnPhotosCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D26EC03C2F6240D700E7F27A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D26EC0242F6240D700E7F27A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D26EC02B2F6240D700E7F27A;
+			remoteInfo = HoehnPhotosOrganizer;
+		};
+		D26EC0462F6240D700E7F27A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D26EC0242F6240D700E7F27A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D26EC02B2F6240D700E7F27A;
+			remoteInfo = HoehnPhotosOrganizer;
+		};
+		D2E89EB62F78992D00EF292D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D26EC0242F6240D700E7F27A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D2E89EA92F78992D00EF292D;
+			remoteInfo = HoehnPhotosCore;
+		};
+		D2E89EB82F78992D00EF292D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D26EC0242F6240D700E7F27A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D26EC02B2F6240D700E7F27A;
+			remoteInfo = HoehnPhotosOrganizer;
+		};
+		D2E89EBD2F78992D00EF292D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D26EC0242F6240D700E7F27A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D2E89EA92F78992D00EF292D;
+			remoteInfo = HoehnPhotosCore;
+		};
+		D2E89EE22F789A4100EF292D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D26EC0242F6240D700E7F27A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D2E89ED22F789A4100EF292D;
+			remoteInfo = HoehnPhotosMobile;
+		};
+		D2E89EEC2F789A4100EF292D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D26EC0242F6240D700E7F27A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D2E89ED22F789A4100EF292D;
+			remoteInfo = HoehnPhotosMobile;
+		};
+		D2E89F132F789A6300EF292D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D26EC0242F6240D700E7F27A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D2E89EA92F78992D00EF292D;
+			remoteInfo = HoehnPhotosCore;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D2E89EC42F78992D00EF292D /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89F152F789A6300EF292D /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				D2E89F122F789A6300EF292D /* HoehnPhotosCore.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		D26EC02C2F6240D700E7F27A /* HoehnPhotosOrganizer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HoehnPhotosOrganizer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D26EC03B2F6240D700E7F27A /* HoehnPhotosOrganizerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HoehnPhotosOrganizerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D26EC0452F6240D700E7F27A /* HoehnPhotosOrganizerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HoehnPhotosOrganizerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D28A797E2F6994790094E517 /* FilmStripDetector.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = FilmStripDetector.mlpackage; sourceTree = "<group>"; };
+		D28A82C02F6A3F020094E517 /* MobileCLIPImageEncoder.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = MobileCLIPImageEncoder.mlpackage; sourceTree = "<group>"; };
+		D28A82C12F6A3F020094E517 /* MobileCLIPTextEncoder.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = MobileCLIPTextEncoder.mlpackage; sourceTree = "<group>"; };
+		D2C61E1D2F7C65FC0091CDBD /* OpenCL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenCL.framework; path = System/Library/Frameworks/OpenCL.framework; sourceTree = SDKROOT; };
+		D2C9CD182F6AFDDF001623CE /* OrientationDetector_i8.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = OrientationDetector_i8.mlpackage; sourceTree = "<group>"; };
+		D2E89EAA2F78992D00EF292D /* HoehnPhotosCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = HoehnPhotosCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2E89EB42F78992D00EF292D /* HoehnPhotosCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HoehnPhotosCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2E89ED32F789A4100EF292D /* HoehnPhotosMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HoehnPhotosMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2E89EE12F789A4100EF292D /* HoehnPhotosMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HoehnPhotosMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2E89EEB2F789A4100EF292D /* HoehnPhotosMobileUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HoehnPhotosMobileUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		D26EC02E2F6240D700E7F27A /* HoehnPhotosOrganizer */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HoehnPhotosOrganizer;
+			sourceTree = "<group>";
+		};
+		D26EC03E2F6240D700E7F27A /* HoehnPhotosOrganizerTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HoehnPhotosOrganizerTests;
+			sourceTree = "<group>";
+		};
+		D26EC0482F6240D700E7F27A /* HoehnPhotosOrganizerUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HoehnPhotosOrganizerUITests;
+			sourceTree = "<group>";
+		};
+		D2E89EAB2F78992D00EF292D /* HoehnPhotosCore */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HoehnPhotosCore;
+			sourceTree = "<group>";
+		};
+		D2E89EBA2F78992D00EF292D /* HoehnPhotosCoreTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HoehnPhotosCoreTests;
+			sourceTree = "<group>";
+		};
+		D2E89ED42F789A4100EF292D /* HoehnPhotosMobile */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HoehnPhotosMobile;
+			sourceTree = "<group>";
+		};
+		D2E89EE42F789A4100EF292D /* HoehnPhotosMobileTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HoehnPhotosMobileTests;
+			sourceTree = "<group>";
+		};
+		D2E89EEE2F789A4100EF292D /* HoehnPhotosMobileUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HoehnPhotosMobileUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D26EC0292F6240D700E7F27A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D2C61E1E2F7C65FC0091CDBD /* OpenCL.framework in Frameworks */,
+				AA000001000000000000006A /* GRDB in Frameworks */,
+				AA000001000000000000007A /* GRDBQuery in Frameworks */,
+				D2C61DF42F7C0CC80091CDBD /* OpenCV in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D26EC0382F6240D700E7F27A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000001000000000000008A /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D26EC0422F6240D700E7F27A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89EA72F78992D00EF292D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D2E89ECE2F78999000EF292D /* GRDBQuery in Frameworks */,
+				D2E89ECC2F78999000EF292D /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89EB12F78992D00EF292D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D2E89EB52F78992D00EF292D /* HoehnPhotosCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89ED02F789A4100EF292D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D2E89F112F789A6300EF292D /* HoehnPhotosCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89EDE2F789A4100EF292D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89EE82F789A4100EF292D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D26EC0232F6240D700E7F27A = {
+			isa = PBXGroup;
+			children = (
+				D26EC02E2F6240D700E7F27A /* HoehnPhotosOrganizer */,
+				D26EC03E2F6240D700E7F27A /* HoehnPhotosOrganizerTests */,
+				D26EC0482F6240D700E7F27A /* HoehnPhotosOrganizerUITests */,
+				D2E89EAB2F78992D00EF292D /* HoehnPhotosCore */,
+				D2E89EBA2F78992D00EF292D /* HoehnPhotosCoreTests */,
+				D2E89ED42F789A4100EF292D /* HoehnPhotosMobile */,
+				D2E89EE42F789A4100EF292D /* HoehnPhotosMobileTests */,
+				D2E89EEE2F789A4100EF292D /* HoehnPhotosMobileUITests */,
+				D26EC02D2F6240D700E7F27A /* Products */,
+				D28A797E2F6994790094E517 /* FilmStripDetector.mlpackage */,
+				D28A82C02F6A3F020094E517 /* MobileCLIPImageEncoder.mlpackage */,
+				D28A82C12F6A3F020094E517 /* MobileCLIPTextEncoder.mlpackage */,
+				D2C9CD182F6AFDDF001623CE /* OrientationDetector_i8.mlpackage */,
+				D2E89ECA2F78999000EF292D /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		D26EC02D2F6240D700E7F27A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D26EC02C2F6240D700E7F27A /* HoehnPhotosOrganizer.app */,
+				D26EC03B2F6240D700E7F27A /* HoehnPhotosOrganizerTests.xctest */,
+				D26EC0452F6240D700E7F27A /* HoehnPhotosOrganizerUITests.xctest */,
+				D2E89EAA2F78992D00EF292D /* HoehnPhotosCore.framework */,
+				D2E89EB42F78992D00EF292D /* HoehnPhotosCoreTests.xctest */,
+				D2E89ED32F789A4100EF292D /* HoehnPhotosMobile.app */,
+				D2E89EE12F789A4100EF292D /* HoehnPhotosMobileTests.xctest */,
+				D2E89EEB2F789A4100EF292D /* HoehnPhotosMobileUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D2E89ECA2F78999000EF292D /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				D2C61E1D2F7C65FC0091CDBD /* OpenCL.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		D2E89EA52F78992D00EF292D /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		D26EC02B2F6240D700E7F27A /* HoehnPhotosOrganizer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D26EC04F2F6240D700E7F27A /* Build configuration list for PBXNativeTarget "HoehnPhotosOrganizer" */;
+			buildPhases = (
+				D26EC0282F6240D700E7F27A /* Sources */,
+				D26EC0292F6240D700E7F27A /* Frameworks */,
+				D26EC02A2F6240D700E7F27A /* Resources */,
+				D2E89EC42F78992D00EF292D /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D2E89EBE2F78992D00EF292D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D26EC02E2F6240D700E7F27A /* HoehnPhotosOrganizer */,
+			);
+			name = HoehnPhotosOrganizer;
+			packageProductDependencies = (
+				AA000001000000000000003A /* GRDB */,
+				AA000001000000000000004A /* GRDBQuery */,
+				D2C61DF32F7C0CC80091CDBD /* OpenCV */,
+			);
+			productName = HoehnPhotosOrganizer;
+			productReference = D26EC02C2F6240D700E7F27A /* HoehnPhotosOrganizer.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D26EC03A2F6240D700E7F27A /* HoehnPhotosOrganizerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D26EC0522F6240D700E7F27A /* Build configuration list for PBXNativeTarget "HoehnPhotosOrganizerTests" */;
+			buildPhases = (
+				D26EC0372F6240D700E7F27A /* Sources */,
+				D26EC0382F6240D700E7F27A /* Frameworks */,
+				D26EC0392F6240D700E7F27A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D26EC03D2F6240D700E7F27A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D26EC03E2F6240D700E7F27A /* HoehnPhotosOrganizerTests */,
+			);
+			name = HoehnPhotosOrganizerTests;
+			packageProductDependencies = (
+				AA000001000000000000005A /* GRDB */,
+			);
+			productName = HoehnPhotosOrganizerTests;
+			productReference = D26EC03B2F6240D700E7F27A /* HoehnPhotosOrganizerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D26EC0442F6240D700E7F27A /* HoehnPhotosOrganizerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D26EC0552F6240D700E7F27A /* Build configuration list for PBXNativeTarget "HoehnPhotosOrganizerUITests" */;
+			buildPhases = (
+				D26EC0412F6240D700E7F27A /* Sources */,
+				D26EC0422F6240D700E7F27A /* Frameworks */,
+				D26EC0432F6240D700E7F27A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D26EC0472F6240D700E7F27A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D26EC0482F6240D700E7F27A /* HoehnPhotosOrganizerUITests */,
+			);
+			name = HoehnPhotosOrganizerUITests;
+			packageProductDependencies = (
+			);
+			productName = HoehnPhotosOrganizerUITests;
+			productReference = D26EC0452F6240D700E7F27A /* HoehnPhotosOrganizerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		D2E89EA92F78992D00EF292D /* HoehnPhotosCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D2E89EC12F78992D00EF292D /* Build configuration list for PBXNativeTarget "HoehnPhotosCore" */;
+			buildPhases = (
+				D2E89EA52F78992D00EF292D /* Headers */,
+				D2E89EA62F78992D00EF292D /* Sources */,
+				D2E89EA72F78992D00EF292D /* Frameworks */,
+				D2E89EA82F78992D00EF292D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D2E89EAB2F78992D00EF292D /* HoehnPhotosCore */,
+			);
+			name = HoehnPhotosCore;
+			packageProductDependencies = (
+				D2E89ECB2F78999000EF292D /* GRDB */,
+				D2E89ECD2F78999000EF292D /* GRDBQuery */,
+			);
+			productName = HoehnPhotosCore;
+			productReference = D2E89EAA2F78992D00EF292D /* HoehnPhotosCore.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		D2E89EB32F78992D00EF292D /* HoehnPhotosCoreTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D2E89EC52F78992D00EF292D /* Build configuration list for PBXNativeTarget "HoehnPhotosCoreTests" */;
+			buildPhases = (
+				D2E89EB02F78992D00EF292D /* Sources */,
+				D2E89EB12F78992D00EF292D /* Frameworks */,
+				D2E89EB22F78992D00EF292D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D2E89EB72F78992D00EF292D /* PBXTargetDependency */,
+				D2E89EB92F78992D00EF292D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D2E89EBA2F78992D00EF292D /* HoehnPhotosCoreTests */,
+			);
+			name = HoehnPhotosCoreTests;
+			packageProductDependencies = (
+			);
+			productName = HoehnPhotosCoreTests;
+			productReference = D2E89EB42F78992D00EF292D /* HoehnPhotosCoreTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D2E89ED22F789A4100EF292D /* HoehnPhotosMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D2E89EF32F789A4200EF292D /* Build configuration list for PBXNativeTarget "HoehnPhotosMobile" */;
+			buildPhases = (
+				D2E89ECF2F789A4100EF292D /* Sources */,
+				D2E89ED02F789A4100EF292D /* Frameworks */,
+				D2E89ED12F789A4100EF292D /* Resources */,
+				D2E89F152F789A6300EF292D /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D2E89F142F789A6300EF292D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D2E89ED42F789A4100EF292D /* HoehnPhotosMobile */,
+			);
+			name = HoehnPhotosMobile;
+			packageProductDependencies = (
+			);
+			productName = HoehnPhotosMobile;
+			productReference = D2E89ED32F789A4100EF292D /* HoehnPhotosMobile.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D2E89EE02F789A4100EF292D /* HoehnPhotosMobileTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D2E89EF62F789A4200EF292D /* Build configuration list for PBXNativeTarget "HoehnPhotosMobileTests" */;
+			buildPhases = (
+				D2E89EDD2F789A4100EF292D /* Sources */,
+				D2E89EDE2F789A4100EF292D /* Frameworks */,
+				D2E89EDF2F789A4100EF292D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D2E89EE32F789A4100EF292D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D2E89EE42F789A4100EF292D /* HoehnPhotosMobileTests */,
+			);
+			name = HoehnPhotosMobileTests;
+			packageProductDependencies = (
+			);
+			productName = HoehnPhotosMobileTests;
+			productReference = D2E89EE12F789A4100EF292D /* HoehnPhotosMobileTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D2E89EEA2F789A4100EF292D /* HoehnPhotosMobileUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D2E89EF92F789A4200EF292D /* Build configuration list for PBXNativeTarget "HoehnPhotosMobileUITests" */;
+			buildPhases = (
+				D2E89EE72F789A4100EF292D /* Sources */,
+				D2E89EE82F789A4100EF292D /* Frameworks */,
+				D2E89EE92F789A4100EF292D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D2E89EED2F789A4100EF292D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D2E89EEE2F789A4100EF292D /* HoehnPhotosMobileUITests */,
+			);
+			name = HoehnPhotosMobileUITests;
+			packageProductDependencies = (
+			);
+			productName = HoehnPhotosMobileUITests;
+			productReference = D2E89EEB2F789A4100EF292D /* HoehnPhotosMobileUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D26EC0242F6240D700E7F27A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2640;
+				LastUpgradeCheck = 2630;
+				TargetAttributes = {
+					D26EC02B2F6240D700E7F27A = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					D26EC03A2F6240D700E7F27A = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = D26EC02B2F6240D700E7F27A;
+					};
+					D26EC0442F6240D700E7F27A = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = D26EC02B2F6240D700E7F27A;
+					};
+					D2E89EA92F78992D00EF292D = {
+						CreatedOnToolsVersion = 26.4;
+					};
+					D2E89EB32F78992D00EF292D = {
+						CreatedOnToolsVersion = 26.4;
+						TestTargetID = D26EC02B2F6240D700E7F27A;
+					};
+					D2E89ED22F789A4100EF292D = {
+						CreatedOnToolsVersion = 26.4;
+					};
+					D2E89EE02F789A4100EF292D = {
+						CreatedOnToolsVersion = 26.4;
+						TestTargetID = D2E89ED22F789A4100EF292D;
+					};
+					D2E89EEA2F789A4100EF292D = {
+						CreatedOnToolsVersion = 26.4;
+						TestTargetID = D2E89ED22F789A4100EF292D;
+					};
+				};
+			};
+			buildConfigurationList = D26EC0272F6240D700E7F27A /* Build configuration list for PBXProject "HoehnPhotosOrganizer" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = D26EC0232F6240D700E7F27A;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA000001000000000000001A /* XCRemoteSwiftPackageReference "GRDB" */,
+				AA000001000000000000002A /* XCRemoteSwiftPackageReference "GRDBQuery" */,
+				D2C61DF22F7C0CC80091CDBD /* XCRemoteSwiftPackageReference "JustTheBinary" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D26EC02D2F6240D700E7F27A /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D26EC02B2F6240D700E7F27A /* HoehnPhotosOrganizer */,
+				D26EC03A2F6240D700E7F27A /* HoehnPhotosOrganizerTests */,
+				D26EC0442F6240D700E7F27A /* HoehnPhotosOrganizerUITests */,
+				D2E89EA92F78992D00EF292D /* HoehnPhotosCore */,
+				D2E89EB32F78992D00EF292D /* HoehnPhotosCoreTests */,
+				D2E89ED22F789A4100EF292D /* HoehnPhotosMobile */,
+				D2E89EE02F789A4100EF292D /* HoehnPhotosMobileTests */,
+				D2E89EEA2F789A4100EF292D /* HoehnPhotosMobileUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D26EC02A2F6240D700E7F27A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D26EC0392F6240D700E7F27A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D26EC0432F6240D700E7F27A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89EA82F78992D00EF292D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89EB22F78992D00EF292D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89ED12F789A4100EF292D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89EDF2F789A4100EF292D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89EE92F789A4100EF292D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D26EC0282F6240D700E7F27A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D28A797F2F6994790094E517 /* FilmStripDetector.mlpackage in Sources */,
+				D28A82C22F6A3F020094E517 /* MobileCLIPImageEncoder.mlpackage in Sources */,
+				D2C9CD192F6AFDDF001623CE /* OrientationDetector_i8.mlpackage in Sources */,
+				D28A82C32F6A3F020094E517 /* MobileCLIPTextEncoder.mlpackage in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D26EC0372F6240D700E7F27A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D26EC0412F6240D700E7F27A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89EA62F78992D00EF292D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89EB02F78992D00EF292D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89ECF2F789A4100EF292D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89EDD2F789A4100EF292D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D2E89EE72F789A4100EF292D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D26EC03D2F6240D700E7F27A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D26EC02B2F6240D700E7F27A /* HoehnPhotosOrganizer */;
+			targetProxy = D26EC03C2F6240D700E7F27A /* PBXContainerItemProxy */;
+		};
+		D26EC0472F6240D700E7F27A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D26EC02B2F6240D700E7F27A /* HoehnPhotosOrganizer */;
+			targetProxy = D26EC0462F6240D700E7F27A /* PBXContainerItemProxy */;
+		};
+		D2E89EB72F78992D00EF292D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D2E89EA92F78992D00EF292D /* HoehnPhotosCore */;
+			targetProxy = D2E89EB62F78992D00EF292D /* PBXContainerItemProxy */;
+		};
+		D2E89EB92F78992D00EF292D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D26EC02B2F6240D700E7F27A /* HoehnPhotosOrganizer */;
+			targetProxy = D2E89EB82F78992D00EF292D /* PBXContainerItemProxy */;
+		};
+		D2E89EBE2F78992D00EF292D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D2E89EA92F78992D00EF292D /* HoehnPhotosCore */;
+			targetProxy = D2E89EBD2F78992D00EF292D /* PBXContainerItemProxy */;
+		};
+		D2E89EE32F789A4100EF292D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D2E89ED22F789A4100EF292D /* HoehnPhotosMobile */;
+			targetProxy = D2E89EE22F789A4100EF292D /* PBXContainerItemProxy */;
+		};
+		D2E89EED2F789A4100EF292D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D2E89ED22F789A4100EF292D /* HoehnPhotosMobile */;
+			targetProxy = D2E89EEC2F789A4100EF292D /* PBXContainerItemProxy */;
+		};
+		D2E89F142F789A6300EF292D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D2E89EA92F78992D00EF292D /* HoehnPhotosCore */;
+			targetProxy = D2E89F132F789A6300EF292D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		D26EC04D2F6240D700E7F27A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		D26EC04E2F6240D700E7F27A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		D26EC0502F6240D700E7F27A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HoehnPhotosOrganizer/HoehnPhotosOrganizer.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QWQ24XZ8NT;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HoehnPhotosOrganizer/Info.plist;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosOrganizer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "HoehnPhotosOrganizer/HoehnPhotosOrganizer-Bridging-Header.h";
+				SWIFT_OBJC_INTEROP_MODE = objcxx;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D26EC0512F6240D700E7F27A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HoehnPhotosOrganizer/HoehnPhotosOrganizer.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QWQ24XZ8NT;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HoehnPhotosOrganizer/Info.plist;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosOrganizer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "HoehnPhotosOrganizer/HoehnPhotosOrganizer-Bridging-Header.h";
+				SWIFT_OBJC_INTEROP_MODE = objcxx;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		D26EC0532F6240D700E7F27A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosOrganizerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OBJC_INTEROP_MODE = objcxx;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HoehnPhotosOrganizer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HoehnPhotosOrganizer";
+			};
+			name = Debug;
+		};
+		D26EC0542F6240D700E7F27A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosOrganizerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OBJC_INTEROP_MODE = objcxx;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HoehnPhotosOrganizer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HoehnPhotosOrganizer";
+			};
+			name = Release;
+		};
+		D26EC0562F6240D700E7F27A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosOrganizerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = HoehnPhotosOrganizer;
+			};
+			name = Debug;
+		};
+		D26EC0572F6240D700E7F27A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosOrganizerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = HoehnPhotosOrganizer;
+			};
+			name = Release;
+		};
+		D2E89EC22F78992D00EF292D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosCore;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_MODULE = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Debug;
+		};
+		D2E89EC32F78992D00EF292D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosCore;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_MODULE = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Release;
+		};
+		D2E89EC62F78992D00EF292D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosCoreTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HoehnPhotosOrganizer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HoehnPhotosOrganizer";
+				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Debug;
+		};
+		D2E89EC72F78992D00EF292D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosCoreTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HoehnPhotosOrganizer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HoehnPhotosOrganizer";
+				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Release;
+		};
+		D2E89EF42F789A4200EF292D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "HoehnPhotosMobile-Info.plist";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosMobile;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D2E89EF52F789A4200EF292D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "HoehnPhotosMobile-Info.plist";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosMobile;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		D2E89EF72F789A4200EF292D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosMobileTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HoehnPhotosMobile.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HoehnPhotosMobile";
+			};
+			name = Debug;
+		};
+		D2E89EF82F789A4200EF292D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosMobileTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HoehnPhotosMobile.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HoehnPhotosMobile";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		D2E89EFA2F789A4200EF292D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosMobileUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = HoehnPhotosMobile;
+			};
+			name = Debug;
+		};
+		D2E89EFB2F789A4200EF292D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9BWE32YB78;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = connorhoehn.com.HoehnPhotosMobileUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = HoehnPhotosMobile;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D26EC0272F6240D700E7F27A /* Build configuration list for PBXProject "HoehnPhotosOrganizer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D26EC04D2F6240D700E7F27A /* Debug */,
+				D26EC04E2F6240D700E7F27A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D26EC04F2F6240D700E7F27A /* Build configuration list for PBXNativeTarget "HoehnPhotosOrganizer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D26EC0502F6240D700E7F27A /* Debug */,
+				D26EC0512F6240D700E7F27A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D26EC0522F6240D700E7F27A /* Build configuration list for PBXNativeTarget "HoehnPhotosOrganizerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D26EC0532F6240D700E7F27A /* Debug */,
+				D26EC0542F6240D700E7F27A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D26EC0552F6240D700E7F27A /* Build configuration list for PBXNativeTarget "HoehnPhotosOrganizerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D26EC0562F6240D700E7F27A /* Debug */,
+				D26EC0572F6240D700E7F27A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D2E89EC12F78992D00EF292D /* Build configuration list for PBXNativeTarget "HoehnPhotosCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D2E89EC22F78992D00EF292D /* Debug */,
+				D2E89EC32F78992D00EF292D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D2E89EC52F78992D00EF292D /* Build configuration list for PBXNativeTarget "HoehnPhotosCoreTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D2E89EC62F78992D00EF292D /* Debug */,
+				D2E89EC72F78992D00EF292D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D2E89EF32F789A4200EF292D /* Build configuration list for PBXNativeTarget "HoehnPhotosMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D2E89EF42F789A4200EF292D /* Debug */,
+				D2E89EF52F789A4200EF292D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D2E89EF62F789A4200EF292D /* Build configuration list for PBXNativeTarget "HoehnPhotosMobileTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D2E89EF72F789A4200EF292D /* Debug */,
+				D2E89EF82F789A4200EF292D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D2E89EF92F789A4200EF292D /* Build configuration list for PBXNativeTarget "HoehnPhotosMobileUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D2E89EFA2F789A4200EF292D /* Debug */,
+				D2E89EFB2F789A4200EF292D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA000001000000000000001A /* XCRemoteSwiftPackageReference "GRDB" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = exactVersion;
+				version = 7.10.0;
+			};
+		};
+		AA000001000000000000002A /* XCRemoteSwiftPackageReference "GRDBQuery" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDBQuery";
+			requirement = {
+				kind = exactVersion;
+				version = 0.11.0;
+			};
+		};
+		D2C61DF22F7C0CC80091CDBD /* XCRemoteSwiftPackageReference "JustTheBinary" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/r0ml/JustTheBinary.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.12.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA000001000000000000003A /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000001000000000000001A /* XCRemoteSwiftPackageReference "GRDB" */;
+			productName = GRDB;
+		};
+		AA000001000000000000004A /* GRDBQuery */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000001000000000000002A /* XCRemoteSwiftPackageReference "GRDBQuery" */;
+			productName = GRDBQuery;
+		};
+		AA000001000000000000005A /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000001000000000000001A /* XCRemoteSwiftPackageReference "GRDB" */;
+			productName = GRDB;
+		};
+		D2C61DF32F7C0CC80091CDBD /* OpenCV */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D2C61DF22F7C0CC80091CDBD /* XCRemoteSwiftPackageReference "JustTheBinary" */;
+			productName = OpenCV;
+		};
+		D2E89ECB2F78999000EF292D /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000001000000000000001A /* XCRemoteSwiftPackageReference "GRDB" */;
+			productName = GRDB;
+		};
+		D2E89ECD2F78999000EF292D /* GRDBQuery */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000001000000000000002A /* XCRemoteSwiftPackageReference "GRDBQuery" */;
+			productName = GRDBQuery;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = D26EC0242F6240D700E7F27A /* Project object */;
+}

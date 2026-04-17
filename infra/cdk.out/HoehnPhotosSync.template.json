@@ -1,0 +1,5123 @@
+{
+ "Description": "HoehnPhotosOrganizer cloud sync stack. Provides S3 private bucket, DynamoDB thread table, and placeholder Lambda + API Gateway for Wave 2.",
+ "Resources": {
+  "PhotoStoragePhotoSyncBucket8F1C123C": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "LifecycleConfiguration": {
+     "Rules": [
+      {
+       "AbortIncompleteMultipartUpload": {
+        "DaysAfterInitiation": 7
+       },
+       "Status": "Enabled"
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    },
+    "VersioningConfiguration": {
+     "Status": "Enabled"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/PhotoStorage/PhotoSyncBucket/Resource"
+   }
+  },
+  "PhotoStoragePhotoSyncBucketPolicyF9E0F9D0": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "PhotoStoragePhotoSyncBucket8F1C123C"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "PhotoStoragePhotoSyncBucket8F1C123C",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "PhotoStoragePhotoSyncBucket8F1C123C",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/PhotoStorage/PhotoSyncBucket/Policy/Resource"
+   }
+  },
+  "ThreadStorageThreadEntryTable583E8F3A": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "threadRootId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sortKey",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "timestamp",
+      "AttributeType": "N"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "byThreadRoot",
+      "KeySchema": [
+       {
+        "AttributeName": "threadRootId",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "timestamp",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "threadRootId",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sortKey",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "TimeToLiveSpecification": {
+     "AttributeName": "ttl",
+     "Enabled": true
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/ThreadStorage/ThreadEntryTable/Resource"
+   }
+  },
+  "AuthAutoConfirmUserServiceRole4DCB0A40": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/Auth/AutoConfirmUser/ServiceRole/Resource"
+   }
+  },
+  "AuthAutoConfirmUser98088961": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "ZipFile": "def handler(event, context):\n    event[\"response\"][\"autoConfirmUser\"] = True\n    if \"email\" in event[\"request\"].get(\"userAttributes\", {}):\n        event[\"response\"][\"autoVerifyEmail\"] = True\n    return event\n"
+    },
+    "Description": "Pre-signup trigger that auto-confirms users created via admin CLI / console. HoehnPhotos is invite-only.",
+    "Handler": "index.handler",
+    "MemorySize": 128,
+    "Role": {
+     "Fn::GetAtt": [
+      "AuthAutoConfirmUserServiceRole4DCB0A40",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 10
+   },
+   "DependsOn": [
+    "AuthAutoConfirmUserServiceRole4DCB0A40"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/Auth/AutoConfirmUser/Resource"
+   }
+  },
+  "AuthUserPoolPreSignUpCognito52504672": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AuthAutoConfirmUser98088961",
+      "Arn"
+     ]
+    },
+    "Principal": "cognito-idp.amazonaws.com",
+    "SourceArn": {
+     "Fn::GetAtt": [
+      "AuthUserPool8115E87F",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/Auth/UserPool/PreSignUpCognito"
+   }
+  },
+  "AuthUserPool8115E87F": {
+   "Type": "AWS::Cognito::UserPool",
+   "Properties": {
+    "AccountRecoverySetting": {
+     "RecoveryMechanisms": [
+      {
+       "Name": "verified_phone_number",
+       "Priority": 1
+      },
+      {
+       "Name": "verified_email",
+       "Priority": 2
+      }
+     ]
+    },
+    "AdminCreateUserConfig": {
+     "AllowAdminCreateUserOnly": true
+    },
+    "AutoVerifiedAttributes": [
+     "email"
+    ],
+    "EmailVerificationMessage": "The verification code to your new account is {####}",
+    "EmailVerificationSubject": "Verify your new account",
+    "LambdaConfig": {
+     "PreSignUp": {
+      "Fn::GetAtt": [
+       "AuthAutoConfirmUser98088961",
+       "Arn"
+      ]
+     }
+    },
+    "Policies": {
+     "PasswordPolicy": {
+      "MinimumLength": 8,
+      "RequireLowercase": true,
+      "RequireNumbers": true,
+      "RequireSymbols": false,
+      "RequireUppercase": true
+     }
+    },
+    "SmsVerificationMessage": "The verification code to your new account is {####}",
+    "UserPoolName": "hoehn-photos-users",
+    "UsernameAttributes": [
+     "email"
+    ],
+    "UsernameConfiguration": {
+     "CaseSensitive": false
+    },
+    "VerificationMessageTemplate": {
+     "DefaultEmailOption": "CONFIRM_WITH_CODE",
+     "EmailMessage": "The verification code to your new account is {####}",
+     "EmailSubject": "Verify your new account",
+     "SmsMessage": "The verification code to your new account is {####}"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/Auth/UserPool/Resource"
+   }
+  },
+  "AuthUserPoolAppClient1D18298A": {
+   "Type": "AWS::Cognito::UserPoolClient",
+   "Properties": {
+    "AccessTokenValidity": 60,
+    "AllowedOAuthFlows": [
+     "implicit",
+     "code"
+    ],
+    "AllowedOAuthFlowsUserPoolClient": true,
+    "AllowedOAuthScopes": [
+     "profile",
+     "phone",
+     "email",
+     "openid",
+     "aws.cognito.signin.user.admin"
+    ],
+    "CallbackURLs": [
+     "https://example.com"
+    ],
+    "ClientName": "hoehn-photos-app",
+    "ExplicitAuthFlows": [
+     "ALLOW_USER_PASSWORD_AUTH",
+     "ALLOW_USER_SRP_AUTH",
+     "ALLOW_REFRESH_TOKEN_AUTH"
+    ],
+    "PreventUserExistenceErrors": "ENABLED",
+    "RefreshTokenValidity": 43200,
+    "SupportedIdentityProviders": [
+     "COGNITO"
+    ],
+    "TokenValidityUnits": {
+     "AccessToken": "minutes",
+     "RefreshToken": "minutes"
+    },
+    "UserPoolId": {
+     "Ref": "AuthUserPool8115E87F"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/Auth/UserPool/AppClient/Resource"
+   }
+  },
+  "CatalogStorageCatalogTableFB61BB55": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "userId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "sk",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "updatedAt",
+      "AttributeType": "N"
+     },
+     {
+      "AttributeName": "canonicalName",
+      "AttributeType": "S"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "byUpdatedAt",
+      "KeySchema": [
+       {
+        "AttributeName": "userId",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "updatedAt",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     },
+     {
+      "IndexName": "byCanonicalName",
+      "KeySchema": [
+       {
+        "AttributeName": "canonicalName",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "userId",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "userId",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "sk",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    },
+    "StreamSpecification": {
+     "StreamViewType": "NEW_AND_OLD_IMAGES"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogStorage/CatalogTable/Resource"
+   }
+  },
+  "AlbumStorageAlbumsTable6077DEC6": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "albumId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "itemType",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "ownerId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "updatedAt",
+      "AttributeType": "N"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "byOwner",
+      "KeySchema": [
+       {
+        "AttributeName": "ownerId",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "updatedAt",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "albumId",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "itemType",
+      "KeyType": "RANGE"
+     }
+    ],
+    "PointInTimeRecoverySpecification": {
+     "PointInTimeRecoveryEnabled": true
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/AlbumStorage/AlbumsTable/Resource"
+   }
+  },
+  "AlbumStorageShareLinksTableA670D7AD": {
+   "Type": "AWS::DynamoDB::Table",
+   "Properties": {
+    "AttributeDefinitions": [
+     {
+      "AttributeName": "token",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "SK",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "albumId",
+      "AttributeType": "S"
+     },
+     {
+      "AttributeName": "createdAt",
+      "AttributeType": "N"
+     }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "GlobalSecondaryIndexes": [
+     {
+      "IndexName": "byAlbum",
+      "KeySchema": [
+       {
+        "AttributeName": "albumId",
+        "KeyType": "HASH"
+       },
+       {
+        "AttributeName": "createdAt",
+        "KeyType": "RANGE"
+       }
+      ],
+      "Projection": {
+       "ProjectionType": "ALL"
+      }
+     }
+    ],
+    "KeySchema": [
+     {
+      "AttributeName": "token",
+      "KeyType": "HASH"
+     },
+     {
+      "AttributeName": "SK",
+      "KeyType": "RANGE"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/AlbumStorage/ShareLinksTable/Resource"
+   }
+  },
+  "PresignedUrlFunctionServiceRole30C56AA3": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/PresignedUrlFunction/ServiceRole/Resource"
+   }
+  },
+  "PresignedUrlFunctionServiceRoleDefaultPolicyDE7C0755": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "PhotoStoragePhotoSyncBucket8F1C123C",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "PhotoStoragePhotoSyncBucket8F1C123C",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ThreadStorageThreadEntryTable583E8F3A",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ThreadStorageThreadEntryTable583E8F3A",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "PresignedUrlFunctionServiceRoleDefaultPolicyDE7C0755",
+    "Roles": [
+     {
+      "Ref": "PresignedUrlFunctionServiceRole30C56AA3"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/PresignedUrlFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "PresignedUrlFunction7EEE7292": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+    },
+    "Description": "Generates presigned S3 PUT/GET URLs for proxy images, curve files, and catalog exports. Called by S3PresignedURLProvider.swift. See infra/sync-api.openapi.yaml /sync/proxies and /sync/curves endpoints.",
+    "Environment": {
+     "Variables": {
+      "BUCKET_NAME": {
+       "Ref": "PhotoStoragePhotoSyncBucket8F1C123C"
+      },
+      "TABLE_NAME": {
+       "Ref": "ThreadStorageThreadEntryTable583E8F3A"
+      },
+      "PRESIGNED_URL_EXPIRY_SECONDS": "900"
+     }
+    },
+    "Handler": "presigned_url_handler.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "PresignedUrlFunctionServiceRole30C56AA3",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "PresignedUrlFunctionServiceRoleDefaultPolicyDE7C0755",
+    "PresignedUrlFunctionServiceRole30C56AA3"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/PresignedUrlFunction/Resource",
+    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "CatalogExportFunctionServiceRole5EE5A0BA": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogExportFunction/ServiceRole/Resource"
+   }
+  },
+  "CatalogExportFunctionServiceRoleDefaultPolicy1BA152E9": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ThreadStorageThreadEntryTable583E8F3A",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ThreadStorageThreadEntryTable583E8F3A",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "CatalogExportFunctionServiceRoleDefaultPolicy1BA152E9",
+    "Roles": [
+     {
+      "Ref": "CatalogExportFunctionServiceRole5EE5A0BA"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogExportFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "CatalogExportFunctionE2B4DD85": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+    },
+    "Description": "Records catalog export metadata (s3Key, checksum, timestamp) in DynamoDB after the Swift client uploads a .sql.gz snapshot via presigned URL. See infra/sync-api.openapi.yaml /sync/catalog endpoint.",
+    "Environment": {
+     "Variables": {
+      "BUCKET_NAME": {
+       "Ref": "PhotoStoragePhotoSyncBucket8F1C123C"
+      },
+      "TABLE_NAME": {
+       "Ref": "ThreadStorageThreadEntryTable583E8F3A"
+      },
+      "PRESIGNED_URL_EXPIRY_SECONDS": "900"
+     }
+    },
+    "Handler": "catalog_export_handler.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "CatalogExportFunctionServiceRole5EE5A0BA",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "CatalogExportFunctionServiceRoleDefaultPolicy1BA152E9",
+    "CatalogExportFunctionServiceRole5EE5A0BA"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogExportFunction/Resource",
+    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ThreadSyncFunctionServiceRoleC53B0C86": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/ThreadSyncFunction/ServiceRole/Resource"
+   }
+  },
+  "ThreadSyncFunctionServiceRoleDefaultPolicyE8E814BE": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ThreadStorageThreadEntryTable583E8F3A",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ThreadStorageThreadEntryTable583E8F3A",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ThreadSyncFunctionServiceRoleDefaultPolicyE8E814BE",
+    "Roles": [
+     {
+      "Ref": "ThreadSyncFunctionServiceRoleC53B0C86"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/ThreadSyncFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ThreadSyncFunctionFA254DC2": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+    },
+    "Description": "Batch-writes thread entries (notes, AI turns, print attempts) to DynamoDB. Called by ThreadSyncClient.swift. See infra/sync-api.openapi.yaml POST /sync/threads endpoint.",
+    "Environment": {
+     "Variables": {
+      "THREAD_TABLE_NAME": {
+       "Ref": "ThreadStorageThreadEntryTable583E8F3A"
+      }
+     }
+    },
+    "Handler": "thread_sync_handler.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "ThreadSyncFunctionServiceRoleC53B0C86",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "ThreadSyncFunctionServiceRoleDefaultPolicyE8E814BE",
+    "ThreadSyncFunctionServiceRoleC53B0C86"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/ThreadSyncFunction/Resource",
+    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ThreadQueryFunctionServiceRoleD674D761": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/ThreadQueryFunction/ServiceRole/Resource"
+   }
+  },
+  "ThreadQueryFunctionServiceRoleDefaultPolicy5271727C": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ThreadStorageThreadEntryTable583E8F3A",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ThreadStorageThreadEntryTable583E8F3A",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ThreadQueryFunctionServiceRoleDefaultPolicy5271727C",
+    "Roles": [
+     {
+      "Ref": "ThreadQueryFunctionServiceRoleD674D761"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/ThreadQueryFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ThreadQueryFunction5C19B31F": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+    },
+    "Description": "Queries thread entries for a photo in chronological order from DynamoDB. Called by ThreadSyncClient.swift. See infra/sync-api.openapi.yaml GET /sync/threads/{threadRootId} endpoint.",
+    "Environment": {
+     "Variables": {
+      "THREAD_TABLE_NAME": {
+       "Ref": "ThreadStorageThreadEntryTable583E8F3A"
+      }
+     }
+    },
+    "Handler": "thread_query_handler.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "ThreadQueryFunctionServiceRoleD674D761",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "ThreadQueryFunctionServiceRoleDefaultPolicy5271727C",
+    "ThreadQueryFunctionServiceRoleD674D761"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/ThreadQueryFunction/Resource",
+    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "SyncStatusFunctionServiceRole78FD54F6": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncStatusFunction/ServiceRole/Resource"
+   }
+  },
+  "SyncStatusFunctionServiceRoleDefaultPolicy95CCB8D0": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "PhotoStoragePhotoSyncBucket8F1C123C",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "PhotoStoragePhotoSyncBucket8F1C123C",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ThreadStorageThreadEntryTable583E8F3A",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ThreadStorageThreadEntryTable583E8F3A",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "SyncStatusFunctionServiceRoleDefaultPolicy95CCB8D0",
+    "Roles": [
+     {
+      "Ref": "SyncStatusFunctionServiceRole78FD54F6"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncStatusFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "SyncStatusFunction62E74C06": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+    },
+    "Description": "Checks per-photo sync status: proxy existence in S3, thread count in DynamoDB. See infra/sync-api.openapi.yaml GET /sync/status/{canonicalId} endpoint.",
+    "Environment": {
+     "Variables": {
+      "BUCKET_NAME": {
+       "Ref": "PhotoStoragePhotoSyncBucket8F1C123C"
+      },
+      "TABLE_NAME": {
+       "Ref": "ThreadStorageThreadEntryTable583E8F3A"
+      },
+      "PRESIGNED_URL_EXPIRY_SECONDS": "900"
+     }
+    },
+    "Handler": "sync_status_handler.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "SyncStatusFunctionServiceRole78FD54F6",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "SyncStatusFunctionServiceRoleDefaultPolicy95CCB8D0",
+    "SyncStatusFunctionServiceRole78FD54F6"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncStatusFunction/Resource",
+    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "RestoreManifestFunctionServiceRole302E5D5F": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/RestoreManifestFunction/ServiceRole/Resource"
+   }
+  },
+  "RestoreManifestFunctionServiceRoleDefaultPolicy4D3F0131": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "PhotoStoragePhotoSyncBucket8F1C123C",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "PhotoStoragePhotoSyncBucket8F1C123C",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ThreadStorageThreadEntryTable583E8F3A",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ThreadStorageThreadEntryTable583E8F3A",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "RestoreManifestFunctionServiceRoleDefaultPolicy4D3F0131",
+    "Roles": [
+     {
+      "Ref": "RestoreManifestFunctionServiceRole302E5D5F"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/RestoreManifestFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "RestoreManifestFunctionD497F945": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+    },
+    "Description": "Lists all synced assets in S3 (proxies/, curves/) and catalog exports in DynamoDB. Returns a paginated RestoreManifest. See infra/sync-api.openapi.yaml GET /restore/manifest endpoint.",
+    "Environment": {
+     "Variables": {
+      "BUCKET_NAME": {
+       "Ref": "PhotoStoragePhotoSyncBucket8F1C123C"
+      },
+      "TABLE_NAME": {
+       "Ref": "ThreadStorageThreadEntryTable583E8F3A"
+      },
+      "PRESIGNED_URL_EXPIRY_SECONDS": "900"
+     }
+    },
+    "Handler": "restore_manifest_handler.handler",
+    "MemorySize": 512,
+    "Role": {
+     "Fn::GetAtt": [
+      "RestoreManifestFunctionServiceRole302E5D5F",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 60
+   },
+   "DependsOn": [
+    "RestoreManifestFunctionServiceRoleDefaultPolicy4D3F0131",
+    "RestoreManifestFunctionServiceRole302E5D5F"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/RestoreManifestFunction/Resource",
+    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "CatalogSyncFunctionServiceRoleE95C8A82": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogSyncFunction/ServiceRole/Resource"
+   }
+  },
+  "CatalogSyncFunctionServiceRoleDefaultPolicyB9CBCA6A": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "CatalogStorageCatalogTableFB61BB55",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "CatalogStorageCatalogTableFB61BB55",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "CatalogSyncFunctionServiceRoleDefaultPolicyB9CBCA6A",
+    "Roles": [
+     {
+      "Ref": "CatalogSyncFunctionServiceRoleE95C8A82"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogSyncFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "CatalogSyncFunctionD657025B": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+    },
+    "Description": "Batch-upserts catalog entities (photos, jobs, people, faces, revisions) to DynamoDB. Called by CatalogSyncClient.swift.",
+    "Environment": {
+     "Variables": {
+      "CATALOG_TABLE_NAME": {
+       "Ref": "CatalogStorageCatalogTableFB61BB55"
+      }
+     }
+    },
+    "Handler": "catalog_sync_handler.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "CatalogSyncFunctionServiceRoleE95C8A82",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "CatalogSyncFunctionServiceRoleDefaultPolicyB9CBCA6A",
+    "CatalogSyncFunctionServiceRoleE95C8A82"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogSyncFunction/Resource",
+    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "CatalogQueryFunctionServiceRole9EB94E2F": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogQueryFunction/ServiceRole/Resource"
+   }
+  },
+  "CatalogQueryFunctionServiceRoleDefaultPolicyCB70C3BF": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "CatalogStorageCatalogTableFB61BB55",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "CatalogStorageCatalogTableFB61BB55",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "CatalogQueryFunctionServiceRoleDefaultPolicyCB70C3BF",
+    "Roles": [
+     {
+      "Ref": "CatalogQueryFunctionServiceRole9EB94E2F"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogQueryFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "CatalogQueryFunctionEC7E8BD9": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+    },
+    "Description": "Queries catalog entities updated since a given timestamp for incremental sync. Called by CatalogSyncClient.swift.",
+    "Environment": {
+     "Variables": {
+      "CATALOG_TABLE_NAME": {
+       "Ref": "CatalogStorageCatalogTableFB61BB55"
+      }
+     }
+    },
+    "Handler": "catalog_query_handler.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "CatalogQueryFunctionServiceRole9EB94E2F",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "CatalogQueryFunctionServiceRoleDefaultPolicyCB70C3BF",
+    "CatalogQueryFunctionServiceRole9EB94E2F"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogQueryFunction/Resource",
+    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "CatalogDeleteFunctionServiceRole4DC7B567": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogDeleteFunction/ServiceRole/Resource"
+   }
+  },
+  "CatalogDeleteFunctionServiceRoleDefaultPolicy36CF5FE4": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "CatalogStorageCatalogTableFB61BB55",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "CatalogStorageCatalogTableFB61BB55",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "CatalogDeleteFunctionServiceRoleDefaultPolicy36CF5FE4",
+    "Roles": [
+     {
+      "Ref": "CatalogDeleteFunctionServiceRole4DC7B567"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogDeleteFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "CatalogDeleteFunction64F9ECCB": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+    },
+    "Description": "Soft-deletes catalog entities by setting deletedAt attribute. Called by CatalogSyncClient.swift.",
+    "Environment": {
+     "Variables": {
+      "CATALOG_TABLE_NAME": {
+       "Ref": "CatalogStorageCatalogTableFB61BB55"
+      }
+     }
+    },
+    "Handler": "catalog_delete_handler.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "CatalogDeleteFunctionServiceRole4DC7B567",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "CatalogDeleteFunctionServiceRoleDefaultPolicy36CF5FE4",
+    "CatalogDeleteFunctionServiceRole4DC7B567"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CatalogDeleteFunction/Resource",
+    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "AlbumFunctionServiceRole2AFC4A10": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/AlbumFunction/ServiceRole/Resource"
+   }
+  },
+  "AlbumFunctionServiceRoleDefaultPolicy9CCF996F": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "AlbumStorageAlbumsTable6077DEC6",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "AlbumStorageAlbumsTable6077DEC6",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:GetRecords",
+        "dynamodb:GetShardIterator",
+        "dynamodb:Query",
+        "dynamodb:GetItem",
+        "dynamodb:Scan",
+        "dynamodb:ConditionCheckItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "AlbumStorageShareLinksTableA670D7AD",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "AlbumStorageShareLinksTableA670D7AD",
+             "Arn"
+            ]
+           },
+           "/index/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "PhotoStoragePhotoSyncBucket8F1C123C",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "PhotoStoragePhotoSyncBucket8F1C123C",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "AlbumFunctionServiceRoleDefaultPolicy9CCF996F",
+    "Roles": [
+     {
+      "Ref": "AlbumFunctionServiceRole2AFC4A10"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/AlbumFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "AlbumFunctionC7C8180F": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+    },
+    "Description": "Handles shared photo album CRUD, photo management, and public share link resolution. GET /a/{token} is public; all other routes require Cognito auth.",
+    "Environment": {
+     "Variables": {
+      "ALBUMS_TABLE_NAME": {
+       "Ref": "AlbumStorageAlbumsTable6077DEC6"
+      },
+      "SHARE_LINKS_TABLE_NAME": {
+       "Ref": "AlbumStorageShareLinksTableA670D7AD"
+      },
+      "BUCKET_NAME": {
+       "Ref": "PhotoStoragePhotoSyncBucket8F1C123C"
+      },
+      "PRESIGNED_URL_EXPIRY_SECONDS": "900"
+     }
+    },
+    "Handler": "album_handler.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "AlbumFunctionServiceRole2AFC4A10",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 30
+   },
+   "DependsOn": [
+    "AlbumFunctionServiceRoleDefaultPolicy9CCF996F",
+    "AlbumFunctionServiceRole2AFC4A10"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/AlbumFunction/Resource",
+    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "SyncApi96088250": {
+   "Type": "AWS::ApiGateway::RestApi",
+   "Properties": {
+    "Description": "REST API for HoehnPhotosOrganizer cloud sync. Endpoints: /sync/presign, /sync/catalog, /sync/threads, /restore/manifest, /albums, /a/{token}.",
+    "Name": "HoehnPhotosSyncApi"
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Resource"
+   }
+  },
+  "SyncApiCloudWatchRoleE80DDF7C": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "apigateway.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+       ]
+      ]
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/CloudWatchRole/Resource"
+   }
+  },
+  "SyncApiAccount6691C425": {
+   "Type": "AWS::ApiGateway::Account",
+   "Properties": {
+    "CloudWatchRoleArn": {
+     "Fn::GetAtt": [
+      "SyncApiCloudWatchRoleE80DDF7C",
+      "Arn"
+     ]
+    }
+   },
+   "DependsOn": [
+    "SyncApi96088250"
+   ],
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Account"
+   }
+  },
+  "SyncApiDeploymentD9DDDFE7bb42cae946764309a91b1c78ebdb53db": {
+   "Type": "AWS::ApiGateway::Deployment",
+   "Properties": {
+    "Description": "Wave 6 — shared album infrastructure",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "DependsOn": [
+    "SyncApiatokenGET90A5C988",
+    "SyncApiatokenAC7C49FC",
+    "SyncApiaE184ED02",
+    "SyncApialbumsalbumIdlinkstokenDELETEC7578415",
+    "SyncApialbumsalbumIdlinkstoken323CAC44",
+    "SyncApialbumsalbumIdlinksPOST8FA1C878",
+    "SyncApialbumsalbumIdlinks0F8F30FE",
+    "SyncApialbumsalbumIdphotosphotoIdDELETED9E6D143",
+    "SyncApialbumsalbumIdphotosphotoId616766F5",
+    "SyncApialbumsalbumIdphotosGET98FA7654",
+    "SyncApialbumsalbumIdphotosPOST8C11DA47",
+    "SyncApialbumsalbumIdphotosE0B9FA5A",
+    "SyncApialbumsalbumIdPUTBD775B9E",
+    "SyncApialbumsalbumIdE010A991",
+    "SyncApialbumsPOST1807758F",
+    "SyncApialbumsCD759167",
+    "SyncApihealthGET24C11D05",
+    "SyncApihealthCFE1BE00",
+    "SyncApirestoremanifestGET28A96CDE",
+    "SyncApirestoremanifestD0BF8D8A",
+    "SyncApirestore5A0CA5AE",
+    "SyncApisynccatalogbatchPOST84CF4A3E",
+    "SyncApisynccatalogbatch3CA4E7CA",
+    "SyncApisynccatalogentityTypeentityIdDELETE33952EBC",
+    "SyncApisynccatalogentityTypeentityIdABFB4946",
+    "SyncApisynccatalogentityType763ABBA2",
+    "SyncApisynccatalogGET76F0C2EA",
+    "SyncApisynccatalogPOSTA5A25844",
+    "SyncApisynccatalog437C6DF0",
+    "SyncApisyncpresignPOST7A1ED15E",
+    "SyncApisyncpresign7168A415",
+    "SyncApisyncEA751BD4",
+    "SyncApisyncstatuscanonicalIdGETA6D79C37",
+    "SyncApisyncstatuscanonicalId0966215E",
+    "SyncApisyncstatusD8CD5921",
+    "SyncApisyncthreadsthreadRootIdGET15339F98",
+    "SyncApisyncthreadsthreadRootId9B66D559",
+    "SyncApisyncthreadsPOSTDBF34528",
+    "SyncApisyncthreads01505589"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Deployment/Resource"
+   }
+  },
+  "SyncApiDeploymentStagev12D30E00F": {
+   "Type": "AWS::ApiGateway::Stage",
+   "Properties": {
+    "DeploymentId": {
+     "Ref": "SyncApiDeploymentD9DDDFE7bb42cae946764309a91b1c78ebdb53db"
+    },
+    "Description": "Wave 6 — shared album infrastructure",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    },
+    "StageName": "v1"
+   },
+   "DependsOn": [
+    "SyncApiAccount6691C425"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/DeploymentStage.v1/Resource"
+   }
+  },
+  "SyncApihealthCFE1BE00": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "SyncApi96088250",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "health",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/health/Resource"
+   }
+  },
+  "SyncApihealthGET24C11D05": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "NONE",
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseTemplates": {
+        "application/json": "{\"status\":\"ok\",\"wave\":\"6\"}"
+       },
+       "StatusCode": "200"
+      }
+     ],
+     "PassthroughBehavior": "NEVER",
+     "RequestTemplates": {
+      "application/json": "{\"statusCode\": 200}"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "StatusCode": "200"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "SyncApihealthCFE1BE00"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/health/GET/Resource"
+   }
+  },
+  "SyncApisyncEA751BD4": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "SyncApi96088250",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "sync",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/Resource"
+   }
+  },
+  "SyncApisyncpresign7168A415": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApisyncEA751BD4"
+    },
+    "PathPart": "presign",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/presign/Resource"
+   }
+  },
+  "SyncApisyncpresignPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTsyncpresign20F46429": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "PresignedUrlFunction7EEE7292",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/POST/sync/presign"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/presign/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..sync.presign"
+   }
+  },
+  "SyncApisyncpresignPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTsyncpresign4A572C03": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "PresignedUrlFunction7EEE7292",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/POST/sync/presign"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/presign/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..sync.presign"
+   }
+  },
+  "SyncApisyncpresignPOST7A1ED15E": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "PresignedUrlFunction7EEE7292",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApisyncpresign7168A415"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/presign/POST/Resource"
+   }
+  },
+  "SyncApisynccatalog437C6DF0": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApisyncEA751BD4"
+    },
+    "PathPart": "catalog",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog/Resource"
+   }
+  },
+  "SyncApisynccatalogPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTsynccatalog6CC7D4CB": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CatalogExportFunctionE2B4DD85",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/POST/sync/catalog"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..sync.catalog"
+   }
+  },
+  "SyncApisynccatalogPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTsynccatalogDB326964": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CatalogExportFunctionE2B4DD85",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/POST/sync/catalog"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..sync.catalog"
+   }
+  },
+  "SyncApisynccatalogPOSTA5A25844": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "CatalogExportFunctionE2B4DD85",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApisynccatalog437C6DF0"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog/POST/Resource"
+   }
+  },
+  "SyncApisynccatalogGETApiPermissionHoehnPhotosSyncSyncApi18496724GETsynccatalog99A82AD7": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CatalogQueryFunctionEC7E8BD9",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/GET/sync/catalog"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog/GET/ApiPermission.HoehnPhotosSyncSyncApi18496724.GET..sync.catalog"
+   }
+  },
+  "SyncApisynccatalogGETApiPermissionTestHoehnPhotosSyncSyncApi18496724GETsynccatalog223B6F08": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CatalogQueryFunctionEC7E8BD9",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/GET/sync/catalog"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog/GET/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.GET..sync.catalog"
+   }
+  },
+  "SyncApisynccatalogGET76F0C2EA": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "CatalogQueryFunctionEC7E8BD9",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApisynccatalog437C6DF0"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog/GET/Resource"
+   }
+  },
+  "SyncApisynccatalogentityType763ABBA2": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApisynccatalog437C6DF0"
+    },
+    "PathPart": "{entityType}",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog/{entityType}/Resource"
+   }
+  },
+  "SyncApisynccatalogentityTypeentityIdABFB4946": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApisynccatalogentityType763ABBA2"
+    },
+    "PathPart": "{entityId}",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog/{entityType}/{entityId}/Resource"
+   }
+  },
+  "SyncApisynccatalogentityTypeentityIdDELETEApiPermissionHoehnPhotosSyncSyncApi18496724DELETEsynccatalogentityTypeentityIdE9BA46B8": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CatalogDeleteFunction64F9ECCB",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/DELETE/sync/catalog/*/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog/{entityType}/{entityId}/DELETE/ApiPermission.HoehnPhotosSyncSyncApi18496724.DELETE..sync.catalog.{entityType}.{entityId}"
+   }
+  },
+  "SyncApisynccatalogentityTypeentityIdDELETEApiPermissionTestHoehnPhotosSyncSyncApi18496724DELETEsynccatalogentityTypeentityId95031BCC": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CatalogDeleteFunction64F9ECCB",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/DELETE/sync/catalog/*/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog/{entityType}/{entityId}/DELETE/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.DELETE..sync.catalog.{entityType}.{entityId}"
+   }
+  },
+  "SyncApisynccatalogentityTypeentityIdDELETE33952EBC": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "DELETE",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "CatalogDeleteFunction64F9ECCB",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApisynccatalogentityTypeentityIdABFB4946"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog/{entityType}/{entityId}/DELETE/Resource"
+   }
+  },
+  "SyncApisynccatalogbatch3CA4E7CA": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApisyncEA751BD4"
+    },
+    "PathPart": "catalog-batch",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog-batch/Resource"
+   }
+  },
+  "SyncApisynccatalogbatchPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTsynccatalogbatch7DAF7606": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CatalogSyncFunctionD657025B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/POST/sync/catalog-batch"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog-batch/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..sync.catalog-batch"
+   }
+  },
+  "SyncApisynccatalogbatchPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTsynccatalogbatch99E4C577": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CatalogSyncFunctionD657025B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/POST/sync/catalog-batch"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog-batch/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..sync.catalog-batch"
+   }
+  },
+  "SyncApisynccatalogbatchPOST84CF4A3E": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "CatalogSyncFunctionD657025B",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApisynccatalogbatch3CA4E7CA"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/catalog-batch/POST/Resource"
+   }
+  },
+  "SyncApisyncthreads01505589": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApisyncEA751BD4"
+    },
+    "PathPart": "threads",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/threads/Resource"
+   }
+  },
+  "SyncApisyncthreadsPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTsyncthreads644ED54F": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "ThreadSyncFunctionFA254DC2",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/POST/sync/threads"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/threads/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..sync.threads"
+   }
+  },
+  "SyncApisyncthreadsPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTsyncthreadsF0050DEF": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "ThreadSyncFunctionFA254DC2",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/POST/sync/threads"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/threads/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..sync.threads"
+   }
+  },
+  "SyncApisyncthreadsPOSTDBF34528": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "ThreadSyncFunctionFA254DC2",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApisyncthreads01505589"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/threads/POST/Resource"
+   }
+  },
+  "SyncApisyncthreadsthreadRootId9B66D559": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApisyncthreads01505589"
+    },
+    "PathPart": "{threadRootId}",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/threads/{threadRootId}/Resource"
+   }
+  },
+  "SyncApisyncthreadsthreadRootIdGETApiPermissionHoehnPhotosSyncSyncApi18496724GETsyncthreadsthreadRootId8CA27B71": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "ThreadQueryFunction5C19B31F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/GET/sync/threads/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/threads/{threadRootId}/GET/ApiPermission.HoehnPhotosSyncSyncApi18496724.GET..sync.threads.{threadRootId}"
+   }
+  },
+  "SyncApisyncthreadsthreadRootIdGETApiPermissionTestHoehnPhotosSyncSyncApi18496724GETsyncthreadsthreadRootId860603A0": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "ThreadQueryFunction5C19B31F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/GET/sync/threads/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/threads/{threadRootId}/GET/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.GET..sync.threads.{threadRootId}"
+   }
+  },
+  "SyncApisyncthreadsthreadRootIdGET15339F98": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "ThreadQueryFunction5C19B31F",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApisyncthreadsthreadRootId9B66D559"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/threads/{threadRootId}/GET/Resource"
+   }
+  },
+  "SyncApisyncstatusD8CD5921": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApisyncEA751BD4"
+    },
+    "PathPart": "status",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/status/Resource"
+   }
+  },
+  "SyncApisyncstatuscanonicalId0966215E": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApisyncstatusD8CD5921"
+    },
+    "PathPart": "{canonicalId}",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/status/{canonicalId}/Resource"
+   }
+  },
+  "SyncApisyncstatuscanonicalIdGETApiPermissionHoehnPhotosSyncSyncApi18496724GETsyncstatuscanonicalId0301CA4B": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "SyncStatusFunction62E74C06",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/GET/sync/status/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/status/{canonicalId}/GET/ApiPermission.HoehnPhotosSyncSyncApi18496724.GET..sync.status.{canonicalId}"
+   }
+  },
+  "SyncApisyncstatuscanonicalIdGETApiPermissionTestHoehnPhotosSyncSyncApi18496724GETsyncstatuscanonicalId34137538": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "SyncStatusFunction62E74C06",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/GET/sync/status/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/status/{canonicalId}/GET/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.GET..sync.status.{canonicalId}"
+   }
+  },
+  "SyncApisyncstatuscanonicalIdGETA6D79C37": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "SyncStatusFunction62E74C06",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApisyncstatuscanonicalId0966215E"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/sync/status/{canonicalId}/GET/Resource"
+   }
+  },
+  "SyncApirestore5A0CA5AE": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "SyncApi96088250",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "restore",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/restore/Resource"
+   }
+  },
+  "SyncApirestoremanifestD0BF8D8A": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApirestore5A0CA5AE"
+    },
+    "PathPart": "manifest",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/restore/manifest/Resource"
+   }
+  },
+  "SyncApirestoremanifestGETApiPermissionHoehnPhotosSyncSyncApi18496724GETrestoremanifestB569D6F3": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RestoreManifestFunctionD497F945",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/GET/restore/manifest"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/restore/manifest/GET/ApiPermission.HoehnPhotosSyncSyncApi18496724.GET..restore.manifest"
+   }
+  },
+  "SyncApirestoremanifestGETApiPermissionTestHoehnPhotosSyncSyncApi18496724GETrestoremanifest853C6963": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RestoreManifestFunctionD497F945",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/GET/restore/manifest"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/restore/manifest/GET/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.GET..restore.manifest"
+   }
+  },
+  "SyncApirestoremanifestGET28A96CDE": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "RestoreManifestFunctionD497F945",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApirestoremanifestD0BF8D8A"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/restore/manifest/GET/Resource"
+   }
+  },
+  "SyncApialbumsCD759167": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "SyncApi96088250",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "albums",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/Resource"
+   }
+  },
+  "SyncApialbumsPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTalbums55384779": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/POST/albums"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..albums"
+   }
+  },
+  "SyncApialbumsPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTalbums16AB20A9": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/POST/albums"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..albums"
+   }
+  },
+  "SyncApialbumsPOST1807758F": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AlbumFunctionC7C8180F",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApialbumsCD759167"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/POST/Resource"
+   }
+  },
+  "SyncApialbumsalbumIdE010A991": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApialbumsCD759167"
+    },
+    "PathPart": "{albumId}",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/Resource"
+   }
+  },
+  "SyncApialbumsalbumIdPUTApiPermissionHoehnPhotosSyncSyncApi18496724PUTalbumsalbumId2450F807": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/PUT/albums/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/PUT/ApiPermission.HoehnPhotosSyncSyncApi18496724.PUT..albums.{albumId}"
+   }
+  },
+  "SyncApialbumsalbumIdPUTApiPermissionTestHoehnPhotosSyncSyncApi18496724PUTalbumsalbumIdD247F04D": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/PUT/albums/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/PUT/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.PUT..albums.{albumId}"
+   }
+  },
+  "SyncApialbumsalbumIdPUTBD775B9E": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "PUT",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AlbumFunctionC7C8180F",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApialbumsalbumIdE010A991"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/PUT/Resource"
+   }
+  },
+  "SyncApialbumsalbumIdphotosE0B9FA5A": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApialbumsalbumIdE010A991"
+    },
+    "PathPart": "photos",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/Resource"
+   }
+  },
+  "SyncApialbumsalbumIdphotosGETApiPermissionHoehnPhotosSyncSyncApi18496724GETalbumsalbumIdphotosE7467FAD": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/GET/albums/*/photos"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/GET/ApiPermission.HoehnPhotosSyncSyncApi18496724.GET..albums.{albumId}.photos"
+   }
+  },
+  "SyncApialbumsalbumIdphotosGETApiPermissionTestHoehnPhotosSyncSyncApi18496724GETalbumsalbumIdphotos44FE6F3F": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/GET/albums/*/photos"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/GET/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.GET..albums.{albumId}.photos"
+   }
+  },
+  "SyncApialbumsalbumIdphotosGET98FA7654": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AlbumFunctionC7C8180F",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApialbumsalbumIdphotosE0B9FA5A"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/GET/Resource"
+   }
+  },
+  "SyncApialbumsalbumIdphotosPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTalbumsalbumIdphotos063243C0": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/POST/albums/*/photos"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..albums.{albumId}.photos"
+   }
+  },
+  "SyncApialbumsalbumIdphotosPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTalbumsalbumIdphotos5C8C389A": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/POST/albums/*/photos"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..albums.{albumId}.photos"
+   }
+  },
+  "SyncApialbumsalbumIdphotosPOST8C11DA47": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AlbumFunctionC7C8180F",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApialbumsalbumIdphotosE0B9FA5A"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/POST/Resource"
+   }
+  },
+  "SyncApialbumsalbumIdphotosphotoId616766F5": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApialbumsalbumIdphotosE0B9FA5A"
+    },
+    "PathPart": "{photoId}",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/{photoId}/Resource"
+   }
+  },
+  "SyncApialbumsalbumIdphotosphotoIdDELETEApiPermissionHoehnPhotosSyncSyncApi18496724DELETEalbumsalbumIdphotosphotoId933345C1": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/DELETE/albums/*/photos/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/{photoId}/DELETE/ApiPermission.HoehnPhotosSyncSyncApi18496724.DELETE..albums.{albumId}.photos.{photoId}"
+   }
+  },
+  "SyncApialbumsalbumIdphotosphotoIdDELETEApiPermissionTestHoehnPhotosSyncSyncApi18496724DELETEalbumsalbumIdphotosphotoIdA32F42ED": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/DELETE/albums/*/photos/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/{photoId}/DELETE/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.DELETE..albums.{albumId}.photos.{photoId}"
+   }
+  },
+  "SyncApialbumsalbumIdphotosphotoIdDELETED9E6D143": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "DELETE",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AlbumFunctionC7C8180F",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApialbumsalbumIdphotosphotoId616766F5"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/photos/{photoId}/DELETE/Resource"
+   }
+  },
+  "SyncApialbumsalbumIdlinks0F8F30FE": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApialbumsalbumIdE010A991"
+    },
+    "PathPart": "links",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/Resource"
+   }
+  },
+  "SyncApialbumsalbumIdlinksPOSTApiPermissionHoehnPhotosSyncSyncApi18496724POSTalbumsalbumIdlinks2890B25D": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/POST/albums/*/links"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/POST/ApiPermission.HoehnPhotosSyncSyncApi18496724.POST..albums.{albumId}.links"
+   }
+  },
+  "SyncApialbumsalbumIdlinksPOSTApiPermissionTestHoehnPhotosSyncSyncApi18496724POSTalbumsalbumIdlinks65BDD927": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/POST/albums/*/links"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/POST/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.POST..albums.{albumId}.links"
+   }
+  },
+  "SyncApialbumsalbumIdlinksPOST8FA1C878": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AlbumFunctionC7C8180F",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApialbumsalbumIdlinks0F8F30FE"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/POST/Resource"
+   }
+  },
+  "SyncApialbumsalbumIdlinkstoken323CAC44": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApialbumsalbumIdlinks0F8F30FE"
+    },
+    "PathPart": "{token}",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/{token}/Resource"
+   }
+  },
+  "SyncApialbumsalbumIdlinkstokenDELETEApiPermissionHoehnPhotosSyncSyncApi18496724DELETEalbumsalbumIdlinkstokenEC434197": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/DELETE/albums/*/links/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/{token}/DELETE/ApiPermission.HoehnPhotosSyncSyncApi18496724.DELETE..albums.{albumId}.links.{token}"
+   }
+  },
+  "SyncApialbumsalbumIdlinkstokenDELETEApiPermissionTestHoehnPhotosSyncSyncApi18496724DELETEalbumsalbumIdlinkstokenD7D0E7FE": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/DELETE/albums/*/links/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/{token}/DELETE/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.DELETE..albums.{albumId}.links.{token}"
+   }
+  },
+  "SyncApialbumsalbumIdlinkstokenDELETEC7578415": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "DELETE",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AlbumFunctionC7C8180F",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApialbumsalbumIdlinkstoken323CAC44"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/albums/{albumId}/links/{token}/DELETE/Resource"
+   }
+  },
+  "SyncApiaE184ED02": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "SyncApi96088250",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "a",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/a/Resource"
+   }
+  },
+  "SyncApiatokenAC7C49FC": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "SyncApiaE184ED02"
+    },
+    "PathPart": "{token}",
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/a/{token}/Resource"
+   }
+  },
+  "SyncApiatokenGETApiPermissionHoehnPhotosSyncSyncApi18496724GETatoken5851B969": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/",
+       {
+        "Ref": "SyncApiDeploymentStagev12D30E00F"
+       },
+       "/GET/a/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/a/{token}/GET/ApiPermission.HoehnPhotosSyncSyncApi18496724.GET..a.{token}"
+   }
+  },
+  "SyncApiatokenGETApiPermissionTestHoehnPhotosSyncSyncApi18496724GETatoken7D21B759": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AlbumFunctionC7C8180F",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:",
+       {
+        "Ref": "AWS::Region"
+       },
+       ":",
+       {
+        "Ref": "AWS::AccountId"
+       },
+       ":",
+       {
+        "Ref": "SyncApi96088250"
+       },
+       "/test-invoke-stage/GET/a/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/a/{token}/GET/ApiPermission.Test.HoehnPhotosSyncSyncApi18496724.GET..a.{token}"
+   }
+  },
+  "SyncApiatokenGET90A5C988": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "NONE",
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:",
+        {
+         "Ref": "AWS::Region"
+        },
+        ":lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AlbumFunctionC7C8180F",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "SyncApiatokenAC7C49FC"
+    },
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/SyncApi/Default/a/{token}/GET/Resource"
+   }
+  },
+  "CognitoAuthorizerF3215DBC": {
+   "Type": "AWS::ApiGateway::Authorizer",
+   "Properties": {
+    "IdentitySource": "method.request.header.Authorization",
+    "Name": "HoehnPhotosCognitoAuthorizer",
+    "ProviderARNs": [
+     {
+      "Fn::GetAtt": [
+       "AuthUserPool8115E87F",
+       "Arn"
+      ]
+     }
+    ],
+    "RestApiId": {
+     "Ref": "SyncApi96088250"
+    },
+    "Type": "COGNITO_USER_POOLS"
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CognitoAuthorizer/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/1WQwW6DMAyGn2X3NCvtE1Cm3aYhup2rEFLqNcQIO6pYxLtPIbR0J3+/7dh/vJPZbiu3L+pGG91cNxZqGY6s9FWoG50C7WU4eH01LIqzWyiFEi3ocU0vOomDIjOJZnSqw6aW4UvV1sTeGSZhVVc3SoZ37zQDulh65tIMHRABukmA6mSoML2f47o60SQ0tg4YZfgmM5SINhYffIfCgnH8XEqZSdD+pIgMk8xjEKqHVrG5qVGGyhDnPczbV8y1Ru9YvJne4tgtc5/UkVU7W05QGUI/aBMv8xDLzMQfhi/YxNSd0qfuXin3fMEBfs0wG3ioaVoHzvbjRnBt7Pr03Hv+t6c4uwJdAzxftxz5gu51L7OdzLKXHwLYDN4xdEZWKf4BmMfx+SUCAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/CDKMetadata/Default"
+   },
+   "Condition": "CDKMetadataAvailable"
+  }
+ },
+ "Outputs": {
+  "SyncApiEndpointE48AE9EB": {
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Ref": "SyncApi96088250"
+      },
+      ".execute-api.",
+      {
+       "Ref": "AWS::Region"
+      },
+      ".",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "SyncApiDeploymentStagev12D30E00F"
+      },
+      "/"
+     ]
+    ]
+   }
+  },
+  "PhotoSyncBucketName": {
+   "Description": "S3 bucket for proxy images, curve files, and thread exports",
+   "Value": {
+    "Ref": "PhotoStoragePhotoSyncBucket8F1C123C"
+   },
+   "Export": {
+    "Name": "HoehnPhotos-SyncBucketName"
+   }
+  },
+  "ThreadEntryTableName": {
+   "Description": "DynamoDB table for per-photo editorial thread entries",
+   "Value": {
+    "Ref": "ThreadStorageThreadEntryTable583E8F3A"
+   },
+   "Export": {
+    "Name": "HoehnPhotos-ThreadTableName"
+   }
+  },
+  "CatalogTableName": {
+   "Description": "DynamoDB table for full catalog sync (photos, jobs, people, faces, revisions)",
+   "Value": {
+    "Ref": "CatalogStorageCatalogTableFB61BB55"
+   },
+   "Export": {
+    "Name": "HoehnPhotos-CatalogTableName"
+   }
+  },
+  "AlbumsTableName": {
+   "Description": "DynamoDB table for shared photo albums (single-table: META + PHOTO# items)",
+   "Value": {
+    "Ref": "AlbumStorageAlbumsTable6077DEC6"
+   },
+   "Export": {
+    "Name": "HoehnPhotos-AlbumsTableName"
+   }
+  },
+  "ShareLinksTableName": {
+   "Description": "DynamoDB table for album share link tokens",
+   "Value": {
+    "Ref": "AlbumStorageShareLinksTableA670D7AD"
+   },
+   "Export": {
+    "Name": "HoehnPhotos-ShareLinksTableName"
+   }
+  },
+  "SyncApiEndpoint": {
+   "Description": "API Gateway invoke URL. Endpoints: /sync/presign, /sync/catalog, /sync/threads, /sync/status/{canonicalId}, /restore/manifest, /albums, /a/{token}.",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Ref": "SyncApi96088250"
+      },
+      ".execute-api.",
+      {
+       "Ref": "AWS::Region"
+      },
+      ".",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "SyncApiDeploymentStagev12D30E00F"
+      },
+      "/"
+     ]
+    ]
+   },
+   "Export": {
+    "Name": "HoehnPhotos-SyncApiEndpoint"
+   }
+  },
+  "UserPoolId": {
+   "Description": "Cognito User Pool ID for Swift app configuration",
+   "Value": {
+    "Ref": "AuthUserPool8115E87F"
+   },
+   "Export": {
+    "Name": "HoehnPhotos-UserPoolId"
+   }
+  },
+  "UserPoolClientId": {
+   "Description": "Cognito User Pool Client ID for Swift app configuration",
+   "Value": {
+    "Ref": "AuthUserPoolAppClient1D18298A"
+   },
+   "Export": {
+    "Name": "HoehnPhotos-UserPoolClientId"
+   }
+  }
+ },
+ "Conditions": {
+  "CDKMetadataAvailable": {
+   "Fn::Or": [
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "af-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-northeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ap-southeast-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "ca-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "cn-northwest-1"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-north-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "eu-west-3"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "il-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-central-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "me-south-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "sa-east-1"
+       ]
+      }
+     ]
+    },
+    {
+     "Fn::Or": [
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-east-2"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-west-1"
+       ]
+      },
+      {
+       "Fn::Equals": [
+        {
+         "Ref": "AWS::Region"
+        },
+        "us-west-2"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,39 @@
+# Xcode build artifacts
+build/
+DerivedData/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# CoreML models (large binaries)
+*.mlpackage/
+*.mlmodelc/
+/Models/
+
+# Python virtual environments
+.venv/
+.venv_*/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Xcode user state
+*.xcuserstate
+
+# CLIP vocab
+clip_vocab.json
+clip_bpe_merges.txt
+
+# Python / infra venvs
+infra/.venv/
+
+# GSD / planning artifacts
+.gsd/
+.planning/
+
+# Loose handoff docs
+HANDOFF.md
+OPENCV-STUDIO-HANDOFF.md
+STUDIO-HANDOFF.md
+GSD_Lineage_Planner.txt
