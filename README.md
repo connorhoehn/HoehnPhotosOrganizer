@@ -2,6 +2,20 @@
 
 A photo management and creative studio app for macOS and iOS, built with SwiftUI and GRDB.
 
+## Screenshots
+
+| Library | Develop |
+|---------|---------|
+| ![Library](docs/screenshots/library.png) | ![Develop](docs/screenshots/develop.png) |
+
+| Studio | Print Lab |
+|--------|-----------|
+| ![Studio](docs/screenshots/studio.png) | ![Print Lab](docs/screenshots/print-lab.png) |
+
+| AI Assistant |
+|--------------|
+| ![Assistant](docs/screenshots/assistant.png) |
+
 ## Features
 
 - **Library** — Import, browse, search, and organize photos with CLIP-based semantic search
