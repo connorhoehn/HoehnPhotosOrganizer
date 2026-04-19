@@ -28,6 +28,9 @@ struct MobileSettingsView: View {
                 activitySection
                 aboutSection
                 cacheSection
+                #if DEBUG
+                debugSection
+                #endif
             }
             .navigationTitle("Settings")
             .toolbar {
@@ -155,6 +158,18 @@ struct MobileSettingsView: View {
             Text("About")
         }
     }
+
+    #if DEBUG
+    private var debugSection: some View {
+        Section("Debug") {
+            NavigationLink {
+                DesignSystemGallery()
+            } label: {
+                Label("Design System Gallery", systemImage: "paintpalette")
+            }
+        }
+    }
+    #endif
 
     private var cacheSection: some View {
         Section {

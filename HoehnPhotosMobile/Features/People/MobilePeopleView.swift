@@ -21,6 +21,8 @@ struct MobilePeopleView: View {
     @State private var loadError: String?
     @State private var searchText = ""
     @State private var sortOrder: PeopleSortOrder = .mostPhotos
+    @State private var unnamedClusterCount: Int = 0
+    @State private var showReview: Bool = false
 
     private let columns = [GridItem(.flexible(), spacing: HPSpacing.md), GridItem(.flexible(), spacing: HPSpacing.md)]
 
@@ -67,6 +69,12 @@ struct MobilePeopleView: View {
                                     Task { await loadPeople() }
                                 }
                                 .padding(.bottom, HPSpacing.sm)
+                            }
+
+                            if unnamedClusterCount > 0 {
+                                reviewBanner
+                                    .padding(.horizontal, HPSpacing.base)
+                                    .padding(.bottom, HPSpacing.sm)
                             }
 
                             FilterChipBar(
@@ -123,9 +131,60 @@ struct MobilePeopleView: View {
                     .accessibilityLabel("Sort order")
                 }
             }
-            .task { await loadPeople() }
-            .refreshable { await loadPeople() }
+            .task {
+                await loadPeople()
+                await loadUnnamedCount()
+            }
+            .refreshable {
+                await loadPeople()
+                await loadUnnamedCount()
+            }
+            .sheet(isPresented: $showReview) {
+                PeopleReviewView()
+                    .environment(\.appDatabase, appDatabase)
+                    .environmentObject(syncService)
+                    .onDisappear { Task { await refreshAfterReview() } }
+            }
         }
+    }
+
+    // MARK: - Review Banner
+
+    private var reviewBanner: some View {
+        Button {
+            HPHaptic.medium()
+            showReview = true
+        } label: {
+            HStack(spacing: HPSpacing.md) {
+                Image(systemName: "person.crop.square.badge.questionmark")
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .padding(HPSpacing.sm)
+                    .background(HPColor.needsReview, in: Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(unnamedClusterCount) to review")
+                        .font(HPFont.cardTitle)
+                    Text("Name unknown faces")
+                        .font(HPFont.cardSubtitle)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.secondary)
+                    .font(.callout.weight(.semibold))
+            }
+            .padding(HPSpacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: HPRadius.card, style: .continuous)
+                    .fill(HPColor.cardBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: HPRadius.card, style: .continuous)
+                    .stroke(HPColor.needsReview.opacity(0.35), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Person Cell
@@ -159,6 +218,18 @@ struct MobilePeopleView: View {
             loadError = error.localizedDescription
         }
         isLoading = false
+    }
+
+    private func loadUnnamedCount() async {
+        guard let db = appDatabase else { return }
+        if let clusters = try? await MobilePeopleRepository(db: db).fetchUnnamedClusters(limit: 200) {
+            unnamedClusterCount = clusters.count
+        }
+    }
+
+    private func refreshAfterReview() async {
+        await loadPeople()
+        await loadUnnamedCount()
     }
 
     private func loadFaceCrop(for person: MobilePeopleRepository.PersonSummary) async {

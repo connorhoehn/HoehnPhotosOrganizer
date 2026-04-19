@@ -104,35 +104,7 @@ struct MobileActivityView: View {
                     List {
                         ForEach(groupedEvents, id: \.0) { section, sectionEvents in
                             Section {
-                                ForEach(sectionEvents) { event in
-                                    Button {
-                                        selectedEvent = event
-                                    } label: {
-                                        HStack(spacing: HPSpacing.md) {
-                                            Image(systemName: sfSymbol(for: event.kind))
-                                                .foregroundStyle(HPColor.chipActive)
-                                                .frame(width: 28, height: 28)
-                                                .background(Circle().fill(HPColor.chipActive.opacity(0.2)))
-                                            VStack(alignment: .leading, spacing: HPSpacing.xxs) {
-                                                Text(event.title).font(HPFont.body)
-                                                if let detail = event.detail {
-                                                    Text(detail)
-                                                        .font(HPFont.cardSubtitle)
-                                                        .foregroundStyle(.secondary)
-                                                        .lineLimit(2)
-                                                }
-                                                Text(HPDateFormatter.relative(event.occurredAt))
-                                                    .font(HPFont.timestamp)
-                                                    .foregroundStyle(.tertiary)
-                                            }
-                                        }
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityElement(children: .combine)
-                                    .accessibilityLabel("\(event.title). \(event.detail ?? "")")
-                                    .accessibilityValue(event.occurredAt.formatted(date: .abbreviated, time: .shortened))
-                                    .accessibilityAddTraits(.isButton)
-                                }
+                                eventRows(sectionEvents)
                             } header: {
                                 SectionHeader(section, style: .inline)
                             }
@@ -154,6 +126,41 @@ struct MobileActivityView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Event Rows
+
+    @ViewBuilder
+    private func eventRows(_ events: [ActivityEvent]) -> some View {
+        ForEach(events, id: \.id) { event in
+            Button {
+                selectedEvent = event
+            } label: {
+                HStack(spacing: HPSpacing.md) {
+                    Image(systemName: sfSymbol(for: event.kind))
+                        .foregroundStyle(HPColor.chipActive)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(HPColor.chipActive.opacity(0.2)))
+                    VStack(alignment: .leading, spacing: HPSpacing.xxs) {
+                        Text(event.title).font(HPFont.body)
+                        if let detail = event.detail {
+                            Text(detail)
+                                .font(HPFont.cardSubtitle)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                        Text(HPDateFormatter.relative(event.occurredAt))
+                            .font(HPFont.timestamp)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(event.title). \(event.detail ?? "")")
+            .accessibilityValue(event.occurredAt.formatted(date: .abbreviated, time: .shortened))
+            .accessibilityAddTraits(.isButton)
         }
     }
 

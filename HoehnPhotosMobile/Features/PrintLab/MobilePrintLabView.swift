@@ -175,17 +175,20 @@ struct MobilePrintLabView: View {
 
     // MARK: - List
 
+    @ViewBuilder
+    private func attemptRows(_ attempts: [MobilePrintRepository.PrintAttemptSummary]) -> some View {
+        ForEach(attempts, id: \.id) { attempt in
+            PrintAttemptRow(attempt: attempt)
+                .contentShape(Rectangle())
+                .onTapGesture { selectedAttempt = attempt }
+        }
+    }
+
     private var attemptList: some View {
         List {
             ForEach(groupedByDate, id: \.key) { group in
                 Section(group.label) {
-                    ForEach(group.attempts) { attempt in
-                        PrintAttemptRow(attempt: attempt)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                selectedAttempt = attempt
-                            }
-                    }
+                    attemptRows(group.attempts)
                 }
             }
         }

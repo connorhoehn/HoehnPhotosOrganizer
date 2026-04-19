@@ -83,7 +83,8 @@ func applyCuration(
     syncService: PeerSyncService
 ) async {
     try? await MobilePhotoRepository(db: db).updateCurationState(id: photo.id, state: state)
-    syncService.enqueueDelta(
+    await syncService.enqueueDelta(
         PhotoCurationDelta(photoId: photo.id, curationState: state.rawValue)
     )
+    NotificationCenter.default.post(name: .cloudSyncCurationChanged, object: nil)
 }

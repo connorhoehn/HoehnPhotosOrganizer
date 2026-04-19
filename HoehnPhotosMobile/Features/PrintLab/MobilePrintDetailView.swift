@@ -34,22 +34,22 @@ struct MobilePrintDetailView: View {
 
                 // MARK: Configuration Section
                 Section("Configuration") {
-                    MetadataRow(icon: PrintTypeInfo.icon(for: attempt.printType),
+                    LabelValueRow(icon: PrintTypeInfo.icon(for: attempt.printType),
                                 label: "Type",
                                 value: PrintTypeInfo.displayName(for: attempt.printType))
-                    MetadataRow(icon: "doc.plaintext", label: "Paper", value: attempt.paper)
+                    LabelValueRow(icon: "doc.plaintext", label: "Paper", value: attempt.paper)
 
                     if let icc = extendedFields["icc_profile_name"], !icc.isEmpty {
-                        MetadataRow(icon: "paintpalette", label: "ICC Profile", value: icc)
+                        LabelValueRow(icon: "paintpalette", label: "ICC Profile", value: icc)
                     }
                     if let intent = extendedFields["rendering_intent"], !intent.isEmpty {
-                        MetadataRow(icon: "slider.horizontal.3", label: "Rendering Intent", value: intent.capitalized)
+                        LabelValueRow(icon: "slider.horizontal.3", label: "Rendering Intent", value: intent.capitalized)
                     }
                     if let curve = extendedFields["qtr_curve_name"], !curve.isEmpty {
-                        MetadataRow(icon: "chart.line.uptrend.xyaxis", label: "QTR Curve", value: curve)
+                        LabelValueRow(icon: "chart.line.uptrend.xyaxis", label: "QTR Curve", value: curve)
                     }
                     if let res = extendedFields["qtr_resolution"], !res.isEmpty {
-                        MetadataRow(icon: "viewfinder", label: "Resolution", value: res)
+                        LabelValueRow(icon: "viewfinder", label: "Resolution", value: res)
                     }
                 }
 
@@ -74,8 +74,8 @@ struct MobilePrintDetailView: View {
 
                 // MARK: Metadata
                 Section("Metadata") {
-                    MetadataRow(icon: "calendar", label: "Date", value: formattedDate(attempt.createdAt))
-                    MetadataRow(icon: "number", label: "ID", value: String(attempt.id.prefix(8)) + "...")
+                    LabelValueRow(icon: "calendar", label: "Date", value: formattedDate(attempt.createdAt))
+                    LabelValueRow(icon: "number", label: "ID", value: String(attempt.id.prefix(8)) + "...")
                 }
             }
             .navigationTitle("Print Attempt")
@@ -148,8 +148,8 @@ struct MobilePrintDetailView: View {
 
     /// Fetches extended print attempt fields from thread_entries content_json.
     private static func fetchExtendedFields(db: AppDatabase, attemptId: String) async throws -> [String: String] {
-        let row = try await db.dbPool.read { conn in
-            try Row.fetchOne(conn, sql: """
+        let row: Row? = try await db.dbPool.read { conn in
+            return try Row.fetchOne(conn, sql: """
                 SELECT content_json FROM thread_entries WHERE id = ?
             """, arguments: [attemptId])
         }

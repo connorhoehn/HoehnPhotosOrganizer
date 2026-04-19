@@ -158,23 +158,32 @@ struct SkeletonActivityList: View {
     var sectionCount: Int = 2
     var rowsPerSection: Int = 3
 
+    private var rowPlaceholder: some View {
+        HStack(spacing: 12) {
+            SkeletonCircle(size: 28)
+            VStack(alignment: .leading, spacing: 4) {
+                SkeletonRect(width: 180, height: 14)
+                SkeletonRect(width: 120, height: 10)
+                SkeletonRect(width: 80, height: 8)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sectionPlaceholder: some View {
+        Section {
+            ForEach(0..<rowsPerSection, id: \.self) { _ in
+                rowPlaceholder
+            }
+        } header: {
+            SkeletonRect(width: 80, height: 12)
+        }
+    }
+
     var body: some View {
         List {
             ForEach(0..<sectionCount, id: \.self) { _ in
-                Section {
-                    ForEach(0..<rowsPerSection, id: \.self) { _ in
-                        HStack(spacing: 12) {
-                            SkeletonCircle(size: 28)
-                            VStack(alignment: .leading, spacing: 4) {
-                                SkeletonRect(width: 180, height: 14)
-                                SkeletonRect(width: 120, height: 10)
-                                SkeletonRect(width: 80, height: 8)
-                            }
-                        }
-                    }
-                } header: {
-                    SkeletonRect(width: 80, height: 12)
-                }
+                sectionPlaceholder
             }
         }
         .accessibilityHidden(true)

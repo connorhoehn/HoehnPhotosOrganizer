@@ -44,26 +44,14 @@ private struct FilmstripThumbnail: View {
     }
 }
 
-// MARK: - MetadataCell
-
-private struct MetadataCell: View {
-    let icon: String
-    let label: String
-    let value: String
-
+// MARK: - MetadataSectionDivider
+//
+// Thin, inset row separator used between `MetadataRow` entries in the EXIF
+// sheet. Matches the reference look in the primitive's preview.
+private struct MetadataSectionDivider: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(label, systemImage: icon)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(Color(uiColor: .secondarySystemBackground))
-        .cornerRadius(8)
+        Divider()
+            .padding(.leading, 22) // approximate lead-in past the icon gutter
     }
 }
 
@@ -71,6 +59,10 @@ private struct MetadataCell: View {
 
 struct MobilePhotoDetailView: View {
     let photos: [PhotoAsset]
+    /// Optional shared namespace so the opening tile can zoom into this view
+    /// via iOS 18's `.navigationTransition(.zoom(sourceID:in:))`. When nil,
+    /// the view presents with the default sheet animation (backwards compat).
+    var heroNamespace: Namespace.ID? = nil
     @State private var currentIndex: Int
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appDatabase) private var appDatabase
@@ -80,6 +72,14 @@ struct MobilePhotoDetailView: View {
 
     // Image state
     @State private var image: UIImage?
+
+    // Phase 4 — Face strip toast (placeholder actions until face-naming ships)
+    @State private var facesToast: ToastMessage?
+
+    // Phase 4 — Similar photos push target. When the user taps a similar
+    // tile that isn't already in `photos`, push a new detail onto the
+    // existing NavigationStack.
+    @State private var pushedSimilarPhoto: PhotoAsset? = nil
 
     // Zoom state (D-10)
     @State private var scale: CGFloat = 1.0
@@ -107,10 +107,16 @@ struct MobilePhotoDetailView: View {
     // Image load error
     @State private var imageLoadFailed = false
 
-    init(photos: [PhotoAsset], initialIndex: Int) {
+    /// Captured at init so the hero zoom transition always anchors on the
+    /// originally-tapped source tile even if the user swipes the filmstrip.
+    private let initialPhotoID: String
+
+    init(photos: [PhotoAsset], initialIndex: Int, heroNamespace: Namespace.ID? = nil) {
         self.photos = photos
+        self.heroNamespace = heroNamespace
         _currentIndex = State(initialValue: initialIndex)
         let photo = photos[initialIndex]
+        self.initialPhotoID = photo.id
         _currentState = State(initialValue: CurationState(rawValue: photo.curationState) ?? .needsReview)
     }
 
@@ -220,7 +226,19 @@ struct MobilePhotoDetailView: View {
             .sheet(isPresented: $showMetadata) {
                 metadataSheet
             }
+            .navigationDestination(isPresented: Binding(
+                get: { pushedSimilarPhoto != nil },
+                set: { if !$0 { pushedSimilarPhoto = nil } }
+            )) {
+                // When the user taps a similar-photos tile for a photo that
+                // isn't already in the filmstrip, push a fresh detail for it.
+                if let p = pushedSimilarPhoto {
+                    MobilePhotoDetailView(photos: [p], initialIndex: 0)
+                        .environmentObject(syncService)
+                }
+            }
         }
+        .modifier(HeroZoomModifier(heroNamespace: heroNamespace, photoID: initialPhotoID))
     }
 
     // MARK: - Filmstrip
@@ -495,77 +513,104 @@ struct MobilePhotoDetailView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    // EXIF grid
+                    // Phase 4 — Face chips strip (above the EXIF grid)
+                    PhotoFacesStrip(photo: photo, toast: $facesToast)
+
+                    // EXIF rows
                     let exif = parseExif(photo.rawExifJson) ?? [:]
 
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        MetadataCell(
-                            icon: "calendar",
-                            label: "Date",
-                            value: formatDate(photo.createdAt)
-                        )
-                        MetadataCell(
-                            icon: "camera",
-                            label: "Camera",
-                            value: exifString(exif, keys: ["Make", "cameraMake", "LensMake"]) ?? "Unknown"
-                        )
-                        MetadataCell(
-                            icon: "timer",
-                            label: "Shutter",
-                            value: exifString(exif, keys: ["ExposureTime", "shutterSpeed", "ShutterSpeedValue"]) ?? "—"
-                        )
-                        MetadataCell(
-                            icon: "camera.aperture",
-                            label: "Aperture",
-                            value: exifAperture(exif) ?? "—"
-                        )
-                        MetadataCell(
-                            icon: "sun.max",
-                            label: "ISO",
-                            value: exifString(exif, keys: ["ISOSpeedRatings", "ISO", "iso"]) ?? "—"
-                        )
-                        MetadataCell(
-                            icon: "arrow.left.and.right",
-                            label: "Focal",
-                            value: exifFocalLength(exif) ?? "—"
-                        )
-                        MetadataCell(
-                            icon: "doc",
-                            label: "File",
-                            value: photo.canonicalName
-                        )
-                        MetadataCell(
-                            icon: "internaldrive",
-                            label: "Size",
-                            value: formatFileSize(photo.fileSize)
-                        )
-                        if let dims = imageDimensions {
-                            MetadataCell(
-                                icon: "square.resize",
-                                label: "Dimensions",
-                                value: dims
+                    VStack(spacing: 0) {
+                        Group {
+                            MetadataRow(
+                                label: "Date",
+                                value: formatDate(photo.createdAt),
+                                systemImage: "calendar"
+                            )
+                            MetadataSectionDivider()
+                            MetadataRow(
+                                label: "Camera",
+                                value: exifString(exif, keys: ["Make", "cameraMake", "LensMake"]),
+                                systemImage: "camera"
+                            )
+                            MetadataSectionDivider()
+                            MetadataRow(
+                                label: "Shutter",
+                                value: exifString(exif, keys: ["ExposureTime", "shutterSpeed", "ShutterSpeedValue"]),
+                                systemImage: "timer",
+                                valueStyle: .mono
+                            )
+                            MetadataSectionDivider()
+                            MetadataRow(
+                                label: "Aperture",
+                                value: exifAperture(exif),
+                                systemImage: "camera.aperture",
+                                valueStyle: .mono
+                            )
+                            MetadataSectionDivider()
+                        }
+                        Group {
+                            MetadataRow(
+                                label: "ISO",
+                                value: exifString(exif, keys: ["ISOSpeedRatings", "ISO", "iso"]),
+                                systemImage: "sun.max",
+                                valueStyle: .mono
+                            )
+                            MetadataSectionDivider()
+                            MetadataRow(
+                                label: "Focal",
+                                value: exifFocalLength(exif),
+                                systemImage: "arrow.left.and.right",
+                                valueStyle: .mono
+                            )
+                            MetadataSectionDivider()
+                            MetadataRow(
+                                label: "File",
+                                value: photo.canonicalName,
+                                systemImage: "doc"
+                            )
+                            MetadataSectionDivider()
+                            MetadataRow(
+                                label: "Size",
+                                value: formatFileSize(photo.fileSize),
+                                systemImage: "internaldrive",
+                                valueStyle: .mono
                             )
                         }
-                        if let profile = photo.colorProfile {
-                            MetadataCell(
-                                icon: "paintpalette",
-                                label: "Color",
-                                value: profile
-                            )
-                        }
-                        if let depth = photo.bitDepth {
-                            MetadataCell(
-                                icon: "waveform",
-                                label: "Bit Depth",
-                                value: "\(depth)-bit"
-                            )
-                        }
-                        if let model = exifString(exif, keys: ["Model", "cameraModel"]) {
-                            MetadataCell(
-                                icon: "camera.badge.ellipsis",
-                                label: "Model",
-                                value: model
-                            )
+                        Group {
+                            if let dims = imageDimensions {
+                                MetadataSectionDivider()
+                                MetadataRow(
+                                    label: "Dimensions",
+                                    value: dims,
+                                    systemImage: "square.resize",
+                                    valueStyle: .mono
+                                )
+                            }
+                            if let profile = photo.colorProfile {
+                                MetadataSectionDivider()
+                                MetadataRow(
+                                    label: "Color",
+                                    value: profile,
+                                    systemImage: "paintpalette"
+                                )
+                            }
+                            if let depth = photo.bitDepth {
+                                MetadataSectionDivider()
+                                MetadataRow(
+                                    label: "Bit Depth",
+                                    value: "\(depth)-bit",
+                                    systemImage: "waveform",
+                                    valueStyle: .mono
+                                )
+                            }
+                            if let model = exifString(exif, keys: ["Model", "cameraModel"]) {
+                                MetadataSectionDivider()
+                                MetadataRow(
+                                    label: "Model",
+                                    value: model,
+                                    systemImage: "camera.badge.ellipsis"
+                                )
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -577,19 +622,35 @@ struct MobilePhotoDetailView: View {
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 16)
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                            if let city = exifString(exif, keys: ["locationCity"]) {
-                                MetadataCell(icon: "building.2", label: "City", value: city)
-                            }
-                            if let country = exifString(exif, keys: ["locationCountry"]) {
-                                MetadataCell(icon: "globe", label: "Country", value: country)
-                            }
+
+                        // Phase 4 — Inline map tile for photos with GPS.
+                        if let coord = photo.gpsCoordinate {
+                            PhotoLocationMapTile(coordinate: coord, title: photo.canonicalName)
+                        }
+
+                        VStack(spacing: 0) {
+                            // TODO: consider consolidating city/country into a
+                            // single "Place" row once we have a canonical
+                            // formatted-address field.
+                            MetadataRow(
+                                label: "City",
+                                value: exifString(exif, keys: ["locationCity"]),
+                                systemImage: "building.2"
+                            )
+                            MetadataSectionDivider()
+                            MetadataRow(
+                                label: "Country",
+                                value: exifString(exif, keys: ["locationCountry"]),
+                                systemImage: "globe"
+                            )
                             if let lat = exifDouble(exif, keys: ["GPSLatitude", "latitude"]),
                                let lon = exifDouble(exif, keys: ["GPSLongitude", "longitude"]) {
-                                MetadataCell(
-                                    icon: "location",
+                                MetadataSectionDivider()
+                                MetadataRow(
                                     label: "GPS",
-                                    value: String(format: "%.4f, %.4f", lat, lon)
+                                    value: String(format: "%.4f, %.4f", lat, lon),
+                                    systemImage: "location",
+                                    valueStyle: .mono
                                 )
                             }
                         }
@@ -602,16 +663,38 @@ struct MobilePhotoDetailView: View {
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 16)
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        MetadataCell(icon: "tag", label: "Curation", value: currentState.title)
+                    VStack(spacing: 0) {
+                        // TODO: Curation is an app-state value, not a raw EXIF
+                        // field — copying it is allowed but slightly odd.
+                        MetadataRow(
+                            label: "Curation",
+                            value: currentState.title,
+                            systemImage: "tag"
+                        )
                         if let scene = photo.sceneType {
-                            MetadataCell(icon: "sparkles", label: "Scene", value: scene)
+                            MetadataSectionDivider()
+                            MetadataRow(
+                                label: "Scene",
+                                value: scene,
+                                systemImage: "sparkles"
+                            )
                         }
                         if let modified = photo.dateModified {
-                            MetadataCell(icon: "pencil", label: "Modified", value: formatDate(modified))
+                            MetadataSectionDivider()
+                            MetadataRow(
+                                label: "Modified",
+                                value: formatDate(modified),
+                                systemImage: "pencil"
+                            )
                         }
                     }
                     .padding(.horizontal, 16)
+
+                    // Phase 4 — Similar photos carousel (below EXIF rows)
+                    Divider().padding(.horizontal, 16)
+                    SimilarPhotosCarousel(photo: photo) { sibling in
+                        handleSimilarPhotoTap(sibling)
+                    }
                 }
                 .padding(.vertical, 16)
             }
@@ -622,6 +705,7 @@ struct MobilePhotoDetailView: View {
                     Button("Done") { showMetadata = false }
                 }
             }
+            .hapticToast($facesToast)
         }
         .presentationDetents([.medium, .large])
     }
@@ -728,5 +812,42 @@ struct MobilePhotoDetailView: View {
         dict["locationCountry"] != nil ||
         dict["GPSLatitude"] != nil ||
         dict["latitude"] != nil
+    }
+
+    // MARK: - Similar photo tap (Phase 4)
+
+    private func handleSimilarPhotoTap(_ sibling: PhotoAsset) {
+        // If this sibling is already in the filmstrip, jump there inline so
+        // the user keeps context. Otherwise push a new detail.
+        if let idx = photos.firstIndex(where: { $0.id == sibling.id }) {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                currentIndex = idx
+            }
+            scale = 1.0; lastScale = 1.0; offset = .zero; lastOffset = .zero
+            imageLoadFailed = false
+            currentState = CurationState(rawValue: sibling.curationState) ?? .needsReview
+            showMetadata = false
+        } else {
+            showMetadata = false
+            pushedSimilarPhoto = sibling
+        }
+    }
+}
+
+// MARK: - HeroZoomModifier (Phase 4)
+
+/// Applies iOS 18's `.navigationTransition(.zoom(sourceID:in:))` when a
+/// hero namespace has been threaded through from the caller. No-op if
+/// the caller did not opt in.
+private struct HeroZoomModifier: ViewModifier {
+    let heroNamespace: Namespace.ID?
+    let photoID: String
+
+    func body(content: Content) -> some View {
+        if let ns = heroNamespace {
+            content.navigationTransition(.zoom(sourceID: "\(HPNamespaceID.photoHero)-\(photoID)", in: ns))
+        } else {
+            content
+        }
     }
 }

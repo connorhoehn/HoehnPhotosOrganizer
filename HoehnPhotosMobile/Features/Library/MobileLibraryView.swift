@@ -27,6 +27,10 @@ struct MobileLibraryView: View {
     // Reduce motion
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    // Phase 4 — Hero zoom namespace shared between the source tile and
+    // the destination MobilePhotoDetailView.
+    @Namespace private var heroNamespace
+
     // Cached photo count — updated in loadPhotos() instead of computed on every body evaluation
     @State private var allPhotoCount: Int = 0
 
@@ -137,7 +141,11 @@ struct MobileLibraryView: View {
                 get: { selectedPhotoIndex != nil },
                 set: { if !$0 { selectedPhotoIndex = nil } }
             )) {
-                MobilePhotoDetailView(photos: allPhotos, initialIndex: selectedPhotoIndex ?? 0)
+                MobilePhotoDetailView(
+                    photos: allPhotos,
+                    initialIndex: selectedPhotoIndex ?? 0,
+                    heroNamespace: heroNamespace
+                )
             }
         }
     }
@@ -224,7 +232,8 @@ struct MobileLibraryView: View {
                             onCuratePhoto: { photo, state in
                                 HPHaptic.medium()
                                 curate(photo: photo, state: state)
-                            }
+                            },
+                            heroNamespace: heroNamespace
                         )
                     } header: {
                         SectionHeader(section.displayLabel, count: section.photos.count, style: .sticky)

@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct MetadataRow: View {
+struct LabelValueRow: View {
     let icon: String
     let label: String
     let value: String
