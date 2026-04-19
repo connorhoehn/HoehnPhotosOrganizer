@@ -8,9 +8,14 @@ Design decisions:
 - Auto-verify email: since users are admin-created, skip email verification.
 - Pre-signup Lambda trigger: auto-confirms users so admin-created users are
   immediately active without requiring a confirmation step.
+- Pre-token-generation Lambda trigger: injects custom claims (custom:role,
+  permVersion) into Cognito-issued tokens so API handlers can authorize
+  requests without a secondary database lookup.
 - RETAIN removal policy: never accidentally destroy the user pool.
 - Password policy: 8+ chars, uppercase, lowercase, digits (no symbols required).
 """
+
+import os
 
 from constructs import Construct
 from aws_cdk import (
@@ -19,6 +24,10 @@ from aws_cdk import (
     aws_cognito as cognito,
     aws_lambda as lambda_,
 )
+
+# Path to the lambdas/ directory, relative to this file. Matches the pattern
+# used in stacks/sync_stack.py so _shared/ gets bundled alongside the handler.
+_LAMBDAS_DIR = os.path.join(os.path.dirname(__file__), "..", "lambdas")
 
 
 # Inline Python code for the pre-signup auto-confirm trigger.
@@ -86,6 +95,36 @@ class HoehnPhotosCognitoAuth(Construct):
             removal_policy=RemovalPolicy.RETAIN,
         )
 
+        # ── Pre-Token-Generation Lambda Trigger ────────────────────────────
+        # Injects custom claims (custom:role, permVersion) into access/ID
+        # tokens at issuance time. Handler lives in
+        # lambdas/pre_token_generation.py and shares authz helpers with the
+        # API handler Lambdas via lambdas/_shared/ (auto-included by the
+        # Code.from_asset bundle).
+        self._pre_token_generation_fn = lambda_.Function(
+            self,
+            "PreTokenGenerationFunction",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="pre_token_generation.handler",
+            code=lambda_.Code.from_asset(_LAMBDAS_DIR),
+            description=(
+                "Cognito pre-token-generation trigger. Injects custom:role "
+                "and permVersion claims into issued tokens so API handlers "
+                "can authorize without a secondary lookup."
+            ),
+            timeout=Duration.seconds(5),
+            memory_size=128,
+        )
+
+        # Attach the function as the PRE_TOKEN_GENERATION trigger. Using
+        # add_trigger (instead of the lambda_triggers kwarg above) keeps the
+        # pre-signup trigger wiring untouched and avoids re-creating the
+        # user pool.
+        self._user_pool.add_trigger(
+            cognito.UserPoolOperation.PRE_TOKEN_GENERATION,
+            self._pre_token_generation_fn,
+        )
+
         # ── User Pool Client ─────────────────────────────────────────────
         self._user_pool_client = self._user_pool.add_client(
             "AppClient",
@@ -120,3 +159,8 @@ class HoehnPhotosCognitoAuth(Construct):
     def user_pool_client_id(self) -> str:
         """CloudFormation-resolved Client ID for outputs / env vars."""
         return self._user_pool_client.user_pool_client_id
+
+    @property
+    def pre_token_generation_fn(self) -> lambda_.Function:
+        """The pre-token-generation trigger Lambda, exposed for stack outputs."""
+        return self._pre_token_generation_fn

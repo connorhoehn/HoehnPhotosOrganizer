@@ -156,6 +156,10 @@ final class MacCloudSyncCoordinator: ObservableObject {
 
     /// Triggers a sync unless we are within the debounce window.
     private func triggerSync(reason: String) {
+        guard CloudSyncEngine.isEnabled else {
+            print("[MacCloudSync] CloudKit sync disabled (feature flag), skipping trigger: \(reason)")
+            return
+        }
         guard autoSyncEnabled else {
             print("[MacCloudSync] Auto-sync disabled, skipping trigger: \(reason)")
             return
@@ -180,6 +184,11 @@ final class MacCloudSyncCoordinator: ObservableObject {
     /// Start a repeating background sync that fires every 5 minutes.
     /// Checks for dirty records before pushing to avoid unnecessary network traffic.
     func startPeriodicSync() {
+        guard CloudSyncEngine.isEnabled else {
+            print("[MacCloudSync] Periodic sync not started — CloudKit sync disabled")
+            stopPeriodicSync()
+            return
+        }
         stopPeriodicSync()
         print("[MacCloudSync] Periodic sync started (5-minute interval)")
 
@@ -212,11 +221,8 @@ final class MacCloudSyncCoordinator: ObservableObject {
 }
 
 // MARK: - Cloud Sync Notification Names
-
-extension Notification.Name {
-    static let cloudSyncPhotosImported = Notification.Name("cloudSyncPhotosImported")
-    static let cloudSyncCurationChanged = Notification.Name("cloudSyncCurationChanged")
-    static let cloudSyncJobChanged = Notification.Name("cloudSyncJobChanged")
-    static let cloudSyncFacesLabeled = Notification.Name("cloudSyncFacesLabeled")
-    static let cloudSyncStudioRendered = Notification.Name("cloudSyncStudioRendered")
-}
+//
+// Shared names (cloudSyncPhotosImported / cloudSyncCurationChanged /
+// cloudSyncJobChanged / cloudSyncFacesLabeled / cloudSyncStudioRendered) are
+// declared in HoehnPhotosCore's `SyncNotificationNames.swift` so the iOS
+// target can observe the same `Notification.Name` values.

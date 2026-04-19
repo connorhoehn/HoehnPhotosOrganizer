@@ -195,6 +195,7 @@ public final class AppDatabase: @unchecked Sendable {
             try db.create(table: "person_identities", ifNotExists: true) { t in
                 t.column("id", .text).notNull().primaryKey()
                 t.column("name", .text)
+                t.column("cover_face_embedding_id", .text)
                 t.column("created_at", .datetime).notNull()
                 t.column("updated_at", .datetime).notNull()
             }
@@ -239,6 +240,28 @@ public final class AppDatabase: @unchecked Sendable {
                 t.column("is_default", .boolean).notNull().defaults(to: false)
                 t.column("created_at", .text).notNull()
                 t.column("updated_at", .text).notNull()
+            }
+        }
+
+        // v2: AWS cloud-sync tracking columns, alongside the existing CloudKit `ck_synced_at`.
+        // Each listed table gets `aws_synced_at` (ISO-8601 text, NULL = never synced) and a
+        // monotonic `aws_version` counter that the sync client bumps after a successful push.
+        //
+        // Only the tables actually created by `ios_v1_minimal` above are touched here; adding a
+        // column to a non-existent table would fail the migration on iOS. All five targets
+        // (photo_assets, person_identities, face_embeddings, triage_jobs, activity_events) are
+        // created unconditionally in v1, so they are all safe to ALTER.
+        migrator.registerMigration("ios_v2_aws_sync_columns") { db in
+            let tables = [
+                "photo_assets",
+                "person_identities",
+                "face_embeddings",
+                "triage_jobs",
+                "activity_events",
+            ]
+            for table in tables {
+                try db.execute(sql: "ALTER TABLE \(table) ADD COLUMN aws_synced_at TEXT")
+                try db.execute(sql: "ALTER TABLE \(table) ADD COLUMN aws_version INTEGER DEFAULT 0")
             }
         }
 

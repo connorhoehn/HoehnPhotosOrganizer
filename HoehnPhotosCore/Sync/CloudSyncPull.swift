@@ -399,6 +399,10 @@ extension CloudSyncEngine {
     /// Subscribe to remote changes via silent push notification.
     /// Only creates the subscription once — checks for existing first.
     func subscribeToChanges() async throws {
+        guard Self.isEnabled else {
+            logger.info("subscribeToChanges skipped — CloudKit sync disabled")
+            return
+        }
         let subscriptionID = "HoehnPhotosZone-changes"
 
         // Check if already subscribed

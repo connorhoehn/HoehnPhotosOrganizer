@@ -18,20 +18,67 @@ struct MobileCloudSyncView: View {
     @State private var accountStatus: CKAccountStatus = .couldNotDetermine
     @State private var autoSyncEnabled = true
     @State private var checkingAccount = true
+    /// Mirror of `CloudSyncEngine.isEnabled` so SwiftUI can observe the flag
+    /// (UserDefaults values aren't automatically published). Kept in sync via
+    /// the Toggle's setter closure below.
+    @State private var cloudKitEnabled: Bool = CloudSyncEngine.isEnabled
 
     var body: some View {
         List {
-            accountSection
+            featureFlagSection
 
-            if accountStatus == .available {
-                syncStateSection
-                controlsSection
-                historySection
+            if cloudKitEnabled {
+                accountSection
+
+                if accountStatus == .available {
+                    syncStateSection
+                    controlsSection
+                    historySection
+                }
             }
         }
         .navigationTitle("Cloud Sync")
         .task {
-            await checkAccountStatus()
+            if cloudKitEnabled {
+                await checkAccountStatus()
+            } else {
+                checkingAccount = false
+            }
+        }
+    }
+
+    // MARK: - Feature Flag Section
+
+    @ViewBuilder
+    private var featureFlagSection: some View {
+        Section {
+            Toggle("iCloud Sync", isOn: Binding(
+                get: { cloudKitEnabled },
+                set: { newValue in
+                    cloudKitEnabled = newValue
+                    CloudSyncEngine.isEnabled = newValue
+                    if newValue {
+                        // User opted in — kick off an initial sync and refresh
+                        // the iCloud account status so the rest of the view
+                        // populates immediately.
+                        checkingAccount = true
+                        Task {
+                            await checkAccountStatus()
+                            await cloudSync.sync()
+                        }
+                    } else {
+                        // User opted out — tear down the auto-sync timer. The
+                        // engine's public methods will also early-return now
+                        // that the flag is false, so no further network calls
+                        // can slip through.
+                        cloudSync.stopAutoSync()
+                    }
+                }
+            ))
+        } header: {
+            Text("iCloud")
+        } footer: {
+            Text("iCloud sync is off by default. Turn on to mirror your library across devices via your private iCloud database. Requires an iCloud developer entitlement.")
         }
     }
 

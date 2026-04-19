@@ -101,16 +101,26 @@ class SyncStack(Stack):
         albums_table = self._album_construct.albums_table
         share_links_table = self._album_construct.share_links_table
 
+        # Shared authz env vars consumed by lambdas/_shared/authz.py on every
+        # handler Lambda. COGNITO_USER_POOL_ID identifies the pool whose JWTs
+        # we verify. AWS_REGION is reserved by the Lambda runtime and auto-
+        # populated per invocation; authz.py reads it from os.environ directly.
+        authz_env = {
+            "COGNITO_USER_POOL_ID": self._auth_construct.user_pool_id,
+        }
+
         # Shared Lambda environment variables
         lambda_env = {
             "BUCKET_NAME": bucket.bucket_name,
             "TABLE_NAME": table.table_name,
             "PRESIGNED_URL_EXPIRY_SECONDS": "900",
+            **authz_env,
         }
 
         # Catalog Lambda environment variables (separate table)
         catalog_lambda_env = {
             "CATALOG_TABLE_NAME": catalog_table.table_name,
+            **authz_env,
         }
 
         # Album Lambda environment variables
@@ -119,6 +129,7 @@ class SyncStack(Stack):
             "SHARE_LINKS_TABLE_NAME": share_links_table.table_name,
             "BUCKET_NAME": bucket.bucket_name,
             "PRESIGNED_URL_EXPIRY_SECONDS": "900",
+            **authz_env,
         }
 
         # ── Lambda: Presigned URL Generator ───────────────────────────────────
@@ -185,6 +196,7 @@ class SyncStack(Stack):
             memory_size=256,
             environment={
                 "THREAD_TABLE_NAME": table.table_name,
+                **authz_env,
             },
         )
 
@@ -209,6 +221,7 @@ class SyncStack(Stack):
             memory_size=256,
             environment={
                 "THREAD_TABLE_NAME": table.table_name,
+                **authz_env,
             },
         )
 
@@ -620,4 +633,23 @@ class SyncStack(Stack):
             value=self._auth_construct.user_pool_client_id,
             description="Cognito User Pool Client ID for Swift app configuration",
             export_name="HoehnPhotos-UserPoolClientId",
+        )
+
+        CfnOutput(
+            self,
+            "PreTokenGenerationFunctionName",
+            value=self._auth_construct.pre_token_generation_fn.function_name,
+            description=(
+                "Cognito pre-token-generation Lambda function name. "
+                "Injects custom:role and permVersion claims at token issuance."
+            ),
+            export_name="HoehnPhotos-PreTokenGenerationFunctionName",
+        )
+
+        CfnOutput(
+            self,
+            "PreTokenGenerationFunctionArn",
+            value=self._auth_construct.pre_token_generation_fn.function_arn,
+            description="ARN of the Cognito pre-token-generation Lambda trigger.",
+            export_name="HoehnPhotos-PreTokenGenerationFunctionArn",
         )

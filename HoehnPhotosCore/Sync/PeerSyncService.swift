@@ -28,11 +28,17 @@ public class PeerSyncService: NSObject, ObservableObject {
     @Published public var pendingDeltas: [PhotoCurationDelta] = []
     private var deltaFlushTimer: Timer?
 
+    // People/face delta queue — separate wire protocol (PEOPLE_V1)
+    @Published public var pendingPeopleDeltas: [PeopleSyncDelta] = []
+    private var peopleDeltaFlushTimer: Timer?
+    private let peopleDeltasKey = "pendingPeopleDeltas"
+
     private var coordinator: Coordinator?
 
     public override init() {
         super.init()
         loadPendingDeltas()
+        loadPendingPeopleDeltas()
     }
 
     public func start() {
@@ -42,9 +48,11 @@ public class PeerSyncService: NSObject, ObservableObject {
                     self?.state = s
                     if case .connected = s {
                         self?.loadPendingDeltas()
+                        self?.loadPendingPeopleDeltas()
                         // Flush after a short delay to let connection stabilize
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                             self?.flushDeltas()
+                            self?.flushPeopleDeltas()
                         }
                     }
                 }
@@ -67,6 +75,11 @@ public class PeerSyncService: NSObject, ObservableObject {
         c.onDeltaAcknowledged = { [weak self] count in
             DispatchQueue.main.async {
                 self?.clearPendingDeltas()
+            }
+        }
+        c.onPeopleDeltaAcknowledged = { [weak self] count in
+            DispatchQueue.main.async {
+                self?.clearPendingPeopleDeltas()
             }
         }
         coordinator = c
@@ -134,6 +147,51 @@ public class PeerSyncService: NSObject, ObservableObject {
         UserDefaults.standard.removeObject(forKey: "pendingCurationDeltas")
     }
 
+    // MARK: - People Delta Queue (faces + persons)
+
+    /// Queue a person/face mutation for sync to Mac. Auto-flushes 3s after change if connected.
+    public func enqueuePeopleDelta(_ delta: PeopleSyncDelta) {
+        // De-dup by delta id (e.g. two rapid renames on same person collapse to latest)
+        pendingPeopleDeltas.removeAll { $0.id == delta.id }
+        pendingPeopleDeltas.append(delta)
+        savePendingPeopleDeltas()
+
+        peopleDeltaFlushTimer?.invalidate()
+        if case .connected = state {
+            peopleDeltaFlushTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+                Task { @MainActor in self?.flushPeopleDeltas() }
+            }
+        }
+    }
+
+    /// Send all pending people deltas as PEOPLE_V1:{json-array}
+    public func flushPeopleDeltas() {
+        guard !pendingPeopleDeltas.isEmpty else { return }
+        guard let data = try? JSONEncoder().encode(pendingPeopleDeltas),
+              let json = String(data: data, encoding: .utf8) else { return }
+        coordinator?.sendMessage("PEOPLE_V1:\(json)")
+    }
+
+    private func savePendingPeopleDeltas() {
+        if let data = try? JSONEncoder().encode(pendingPeopleDeltas),
+           let json = String(data: data, encoding: .utf8) {
+            UserDefaults.standard.set(json, forKey: peopleDeltasKey)
+        }
+    }
+
+    public func loadPendingPeopleDeltas() {
+        if let json = UserDefaults.standard.string(forKey: peopleDeltasKey),
+           let data = json.data(using: .utf8),
+           let deltas = try? JSONDecoder().decode([PeopleSyncDelta].self, from: data) {
+            pendingPeopleDeltas = deltas
+        }
+    }
+
+    private func clearPendingPeopleDeltas() {
+        pendingPeopleDeltas.removeAll()
+        UserDefaults.standard.removeObject(forKey: peopleDeltasKey)
+    }
+
     // MARK: - Manifest Handling
 
     private func handleManifest(json: String, peer: MCPeerID) {
@@ -165,6 +223,7 @@ private class Coordinator: NSObject, MCSessionDelegate, MCNearbyServiceBrowserDe
 
     var onManifestReceived: ((String, MCPeerID) -> Void)?
     var onDeltaAcknowledged: ((Int) -> Void)?
+    var onPeopleDeltaAcknowledged: ((Int) -> Void)?
 
     let peerID: MCPeerID
     let session: MCSession
@@ -253,6 +312,9 @@ private class Coordinator: NSObject, MCSessionDelegate, MCNearbyServiceBrowserDe
         } else if msg.hasPrefix("DELTA_ACK:") {
             let count = Int(String(msg.dropFirst("DELTA_ACK:".count))) ?? 0
             onDeltaAcknowledged?(count)
+        } else if msg.hasPrefix("PEOPLE_ACK:") {
+            let count = Int(String(msg.dropFirst("PEOPLE_ACK:".count))) ?? 0
+            onPeopleDeltaAcknowledged?(count)
         }
     }
 

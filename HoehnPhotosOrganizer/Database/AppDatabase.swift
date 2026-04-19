@@ -798,6 +798,33 @@ final class AppDatabase: Sendable {
             print("[v31_catalog_sync_columns] Migration applied — updated_at, last_synced_at, deleted_at added")
         }
 
+        // v32: AWS cloud-sync tracking columns — mirror of the Core
+        // `ios_v2_aws_sync_columns` migration so the same CloudPushCoordinator
+        // / AWSPullCoordinator can operate against the Mac's full GRDB schema.
+        //
+        // Each listed table gets:
+        //   - aws_synced_at (TEXT, NULL = never synced)
+        //   - aws_version   (INTEGER DEFAULT 0, bumped after every successful push)
+        //
+        // Kept orthogonal to v30_cloudkit_sync_columns (ck_synced_at) and v27
+        // (last_synced_at, which is a different "sync path" marker). AWS uses
+        // its own pair of columns so either path can advance without stomping
+        // on the other's high-water mark.
+        migrator.registerMigration("v32_aws_sync_columns") { db in
+            let tables = [
+                "photo_assets",
+                "person_identities",
+                "face_embeddings",
+                "triage_jobs",
+                "activity_events",
+            ]
+            for table in tables {
+                try db.execute(sql: "ALTER TABLE \(table) ADD COLUMN aws_synced_at TEXT")
+                try db.execute(sql: "ALTER TABLE \(table) ADD COLUMN aws_version INTEGER DEFAULT 0")
+            }
+            print("[v32_aws_sync_columns] Migration applied — aws_synced_at + aws_version added to 5 tables")
+        }
+
         try migrator.migrate(dbPool)
         validateMigrations()
     }

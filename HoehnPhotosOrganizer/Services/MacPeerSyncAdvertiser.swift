@@ -22,6 +22,8 @@ class MacPeerSyncAdvertiser: NSObject, ObservableObject {
     @Published var state: SyncState = .idle
     @Published var lastDeltaCount: Int = 0
     @Published var deltaApplying: Bool = false
+    @Published var lastPeopleDeltaCount: Int = 0
+    @Published var peopleDeltaApplying: Bool = false
 
     private var coordinator: Coordinator?
 
@@ -34,6 +36,11 @@ class MacPeerSyncAdvertiser: NSObject, ObservableObject {
         c.onDeltaReceived = { [weak self] json, peer in
             DispatchQueue.main.async {
                 self?.applyDelta(json: json, coordinator: c)
+            }
+        }
+        c.onPeopleReceived = { [weak self] json, peer in
+            DispatchQueue.main.async {
+                self?.applyPeopleDeltas(json: json, coordinator: c)
             }
         }
         c.onNeedProxies = { [weak self] json, peer in
@@ -111,6 +118,105 @@ class MacPeerSyncAdvertiser: NSObject, ObservableObject {
             }
         }
     }
+
+    /// Apply people/face mutations received from iOS to local database.
+    /// All deltas are applied inside a single write transaction so a failed
+    /// delta cannot leave the DB half-updated.
+    private func applyPeopleDeltas(json: String, coordinator: Coordinator) {
+        guard let data = json.data(using: .utf8),
+              let deltas = try? JSONDecoder().decode([PeopleSyncDelta].self, from: data)
+        else {
+            print("[Mac] Failed to decode PEOPLE_V1 JSON")
+            return
+        }
+
+        peopleDeltaApplying = true
+        let dbPath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("HoehnPhotosOrganizer/Catalog.db")
+
+        Task {
+            do {
+                let dbPool = try DatabasePool(path: dbPath.path)
+                try await dbPool.write { db in
+                    for delta in deltas {
+                        switch delta {
+                        case .createPerson(let id, let name, let coverFaceId, let createdAt):
+                            try db.execute(
+                                sql: """
+                                INSERT OR IGNORE INTO person_identities
+                                    (id, name, cover_face_embedding_id, created_at)
+                                VALUES (?, ?, ?, ?)
+                                """,
+                                arguments: [id, name, coverFaceId, createdAt]
+                            )
+
+                        case .renamePerson(let id, let name, _):
+                            try db.execute(
+                                sql: "UPDATE person_identities SET name = ? WHERE id = ?",
+                                arguments: [name, id]
+                            )
+
+                        case .deletePerson(let id, _):
+                            // Null out face labels first (no cascade on person delete).
+                            try db.execute(
+                                sql: """
+                                UPDATE face_embeddings
+                                SET person_id = NULL, labeled_by = NULL
+                                WHERE person_id = ?
+                                """,
+                                arguments: [id]
+                            )
+                            try db.execute(
+                                sql: "DELETE FROM person_identities WHERE id = ?",
+                                arguments: [id]
+                            )
+
+                        case .mergePeople(let sourceId, let targetId, _):
+                            try db.execute(
+                                sql: "UPDATE face_embeddings SET person_id = ? WHERE person_id = ?",
+                                arguments: [targetId, sourceId]
+                            )
+                            try db.execute(
+                                sql: "DELETE FROM person_identities WHERE id = ?",
+                                arguments: [sourceId]
+                            )
+
+                        case .assignFace(let faceId, let personId, let labeledBy, _):
+                            try db.execute(
+                                sql: """
+                                UPDATE face_embeddings
+                                SET person_id = ?, labeled_by = ?, needs_review = 0
+                                WHERE id = ?
+                                """,
+                                arguments: [personId, labeledBy, faceId]
+                            )
+
+                        case .unassignFace(let faceId, _):
+                            try db.execute(
+                                sql: """
+                                UPDATE face_embeddings
+                                SET person_id = NULL, labeled_by = NULL, needs_review = 0
+                                WHERE id = ?
+                                """,
+                                arguments: [faceId]
+                            )
+                        }
+                    }
+                }
+                await MainActor.run {
+                    self.lastPeopleDeltaCount = deltas.count
+                    self.peopleDeltaApplying = false
+                    coordinator.sendMessage("PEOPLE_ACK:\(deltas.count)")
+                    print("[Mac] Applied \(deltas.count) people delta(s) from iOS")
+                }
+            } catch {
+                await MainActor.run {
+                    self.peopleDeltaApplying = false
+                    print("[Mac] Failed to apply people deltas: \(error)")
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Coordinator
@@ -119,6 +225,7 @@ private class Coordinator: NSObject, MCSessionDelegate, MCNearbyServiceAdvertise
 
     let onState: (MacPeerSyncAdvertiser.SyncState) -> Void
     var onDeltaReceived: ((String, MCPeerID) -> Void)?
+    var onPeopleReceived: ((String, MCPeerID) -> Void)?
     var onNeedProxies: ((String, MCPeerID) -> Void)?
     let peerID: MCPeerID
     let session: MCSession
@@ -255,6 +362,10 @@ private class Coordinator: NSObject, MCSessionDelegate, MCNearbyServiceAdvertise
             let json = String(msg.dropFirst("DELTA_V1:".count))
             print("[Mac] Received DELTA_V1 with \(json.count) bytes")
             onDeltaReceived?(json, peerID)
+        } else if msg.hasPrefix("PEOPLE_V1:") {
+            let json = String(msg.dropFirst("PEOPLE_V1:".count))
+            print("[Mac] Received PEOPLE_V1 with \(json.count) bytes")
+            onPeopleReceived?(json, peerID)
         } else if msg.hasPrefix("NEED_PROXIES:") {
             let json = String(msg.dropFirst("NEED_PROXIES:".count))
             print("[Mac] Received NEED_PROXIES request")

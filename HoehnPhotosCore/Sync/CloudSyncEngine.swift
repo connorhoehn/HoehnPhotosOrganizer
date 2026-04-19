@@ -44,6 +44,12 @@ public struct SyncEvent: Identifiable, Sendable {
 @MainActor
 public final class CloudSyncEngine: ObservableObject {
 
+    // MARK: - CloudKit identifiers
+
+    /// The CloudKit container identifier. Must match the `iCloud.<bundle-prefix>` rule and
+    /// the entitlements files for both the macOS and iOS targets.
+    public static let containerIdentifier = "iCloud.connorhoehn.com.HoehnPhotos"
+
     // MARK: - CloudKit handles
 
     public let container: CKContainer
@@ -69,7 +75,7 @@ public final class CloudSyncEngine: ObservableObject {
     // MARK: - Init
 
     public init(appDatabase: AppDatabase) {
-        self.container = CKContainer(identifier: "iCloud.com.connorhoehn.HoehnPhotos")
+        self.container = CKContainer(identifier: CloudSyncEngine.containerIdentifier)
         self.database = container.privateCloudDatabase
         self.zoneID = CKRecordZone.ID(zoneName: "HoehnPhotosZone", ownerName: CKCurrentUserDefaultName)
         self.appDatabase = appDatabase
@@ -79,6 +85,10 @@ public final class CloudSyncEngine: ObservableObject {
 
     /// Creates the custom record zone if it does not already exist.
     public func ensureZoneExists() async throws {
+        guard Self.isEnabled else {
+            print("[CloudSync] ensureZoneExists skipped — CloudKit sync disabled")
+            return
+        }
         let zone = CKRecordZone(zoneID: zoneID)
         do {
             let _ = try await database.save(zone)
@@ -94,6 +104,11 @@ public final class CloudSyncEngine: ObservableObject {
     /// Run a full sync cycle: ensure zone exists, pull remote changes, push local changes.
     /// Pull and push implementations are in CloudSyncPull.swift and CloudSyncPush.swift.
     public func sync() async {
+        guard Self.isEnabled else {
+            syncState = .idle
+            print("[CloudSync] sync() skipped — CloudKit sync disabled")
+            return
+        }
         do {
             try await ensureZoneExists()
 
@@ -126,6 +141,11 @@ public final class CloudSyncEngine: ObservableObject {
     /// Start a repeating timer that triggers `sync()` at the given interval.
     /// Default interval is 5 minutes (300 seconds).
     public func startAutoSync(interval: TimeInterval = 300) {
+        guard Self.isEnabled else {
+            stopAutoSync()
+            print("[CloudSync] startAutoSync skipped — CloudKit sync disabled")
+            return
+        }
         stopAutoSync()
         autoSyncTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -146,6 +166,10 @@ public final class CloudSyncEngine: ObservableObject {
     /// Counts local records that have changed since their last CloudKit sync.
     /// Uses ck_synced_at vs updated_at comparison.
     public func refreshPendingChangeCount() async {
+        guard Self.isEnabled else {
+            pendingChangeCount = 0
+            return
+        }
         do {
             let count = try await appDatabase.dbPool.read { db -> Int in
                 let sql = """
@@ -158,5 +182,30 @@ public final class CloudSyncEngine: ObservableObject {
         } catch {
             print("[CloudSync] Failed to count pending changes: \(error)")
         }
+    }
+}
+
+// MARK: - Feature Flag
+
+public extension CloudSyncEngine {
+    /// UserDefaults key backing the CloudKit-sync feature flag. Kept as a
+    /// public constant so test fixtures and UI bindings can reference the
+    /// exact key without hard-coding the string in multiple places.
+    static let isEnabledDefaultsKey = "com.hoehn-photos.cloudkit.enabled"
+
+    /// User-toggled master switch for all CloudKit sync activity.
+    ///
+    /// Defaults to `false` because the app ships without an iCloud developer
+    /// entitlement by default; any CloudKit network call would crash or error.
+    /// When this returns `false`, every public method on `CloudSyncEngine`
+    /// early-returns without making network requests, registering
+    /// subscriptions, or creating zones.
+    ///
+    /// Callers wiring CloudKit-adjacent services (silent-push registration,
+    /// trigger bridges, Mac coordinator) should also gate their start-up on
+    /// this flag to avoid indirect network activity.
+    static var isEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: isEnabledDefaultsKey) }
+        set { UserDefaults.standard.set(newValue, forKey: isEnabledDefaultsKey) }
     }
 }
