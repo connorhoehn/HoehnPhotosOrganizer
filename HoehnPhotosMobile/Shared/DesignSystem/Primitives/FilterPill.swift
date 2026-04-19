@@ -22,6 +22,7 @@ struct FilterPill: View {
                     Image(systemName: systemImage)
                         .font(.caption.weight(.semibold))
                         .symbolRenderingMode(.hierarchical)
+                        .accessibilityHidden(true)
                 }
                 Text(label)
                     .font(isActive ? HPFont.chipLabelActive : HPFont.chipLabel)
@@ -57,6 +58,16 @@ struct FilterPill: View {
         #if canImport(Pow)
         .changeEffect(.jump(height: 4), value: isActive)
         #endif
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityPillLabel)
+        .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var accessibilityPillLabel: String {
+        if let count {
+            return "\(label), \(count)"
+        }
+        return label
     }
 }
 

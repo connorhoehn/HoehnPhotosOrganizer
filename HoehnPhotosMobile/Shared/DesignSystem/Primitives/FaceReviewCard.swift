@@ -37,6 +37,7 @@ struct FaceReviewCard: View {
                         .scaledToFill()
                         .blur(radius: 22)
                         .overlay(.black.opacity(0.25))
+                        .accessibilityHidden(true)
                 } else {
                     MeshBackdrop(palette: .dusk, animated: false)
                 }
@@ -45,6 +46,7 @@ struct FaceReviewCard: View {
                     Spacer(minLength: 0)
                     FaceChip(image: model.faceImage, name: nil, size: .large, isSelected: true) {}
                         .padding(.top, HPSpacing.xl)
+                        .accessibilityHidden(true)
 
                     if let date = model.photoDateText {
                         Text(date)
@@ -71,6 +73,8 @@ struct FaceReviewCard: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .tint(HPColor.archive)
+                                .accessibilityLabel("Merge")
+                                .accessibilityHint("Merge this face into an existing person")
 
                                 Button {
                                     HPHaptic.medium()
@@ -81,6 +85,8 @@ struct FaceReviewCard: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .tint(HPColor.reject)
+                                .accessibilityLabel("Not a person")
+                                .accessibilityHint("Reject this cluster")
 
                                 Button {
                                     HPHaptic.medium()
@@ -92,6 +98,8 @@ struct FaceReviewCard: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .tint(HPColor.keeper)
+                                .accessibilityLabel("Name")
+                                .accessibilityHint("Open naming sheet")
                             }
                             .labelStyle(.titleAndIcon)
                         }
@@ -110,12 +118,15 @@ struct FaceReviewCard: View {
                     .onChanged { g in dragOffset = g.translation }
                     .onEnded { g in
                         if g.translation.width > threshold {
+                            HPHaptic.medium()
                             draftName = model.suggestedName ?? ""
                             showingNameSheet = true
                             withAnimation(HPMotion.smooth) { dragOffset = .zero }
                         } else if g.translation.width < -threshold {
+                            HPHaptic.medium()
                             swipe(.reject, geo: geo)
                         } else if g.translation.height < -threshold {
+                            HPHaptic.medium()
                             swipe(.merge, geo: geo)
                         } else {
                             withAnimation(HPMotion.smooth) { dragOffset = .zero }
@@ -125,6 +136,17 @@ struct FaceReviewCard: View {
             #if canImport(Pow)
             .conditionalEffect(.pushDown, condition: abs(dragOffset.width) > 40 || dragOffset.height < -40)
             #endif
+            .accessibilityLabel(cardAccessibilityLabel)
+            .accessibilityAction(named: Text("Name")) {
+                draftName = model.suggestedName ?? ""
+                showingNameSheet = true
+            }
+            .accessibilityAction(named: Text("Reject")) {
+                swipe(.reject, geo: geo)
+            }
+            .accessibilityAction(named: Text("Merge")) {
+                swipe(.merge, geo: geo)
+            }
         }
         .aspectRatio(0.72, contentMode: .fit)
         .sheet(isPresented: $showingNameSheet) {
@@ -132,6 +154,13 @@ struct FaceReviewCard: View {
                 .presentationDetents([.height(260)])
                 .presentationBackground(.ultraThinMaterial)
         }
+    }
+
+    private var cardAccessibilityLabel: String {
+        var parts: [String] = ["Unknown face"]
+        if let date = model.photoDateText { parts.append(date) }
+        if let suggested = model.suggestedName { parts.append("Suggested name \(suggested)") }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder
@@ -157,11 +186,13 @@ struct FaceReviewCard: View {
                     .padding(.top, HPSpacing.base)
             }
         }
+        .accessibilityHidden(true)
     }
 
     private func hintPill(_ label: String, icon: String, color: Color, strength: Double) -> some View {
         HStack(spacing: HPSpacing.xs) {
             Image(systemName: icon)
+                .accessibilityHidden(true)
             Text(label).font(HPFont.chipLabelActive)
         }
         .padding(.horizontal, HPSpacing.md)

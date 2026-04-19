@@ -38,6 +38,7 @@ struct MetadataRow: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .frame(width: 14)
+                        .accessibilityHidden(true)
                 }
                 Text(label.uppercased())
                     .font(HPFont.metaLabel)
@@ -66,6 +67,10 @@ struct MetadataRow: View {
                 withAnimation(HPMotion.fadeSlow) { copied = false }
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
+        .accessibilityValue(displayValue)
+        .accessibilityHint(copyable && value?.isEmpty == false ? "Double tap to copy" : "")
     }
 }
 

@@ -29,6 +29,7 @@ struct MobileSearchView: View {
 
     @Environment(\.appDatabase) private var appDatabase
     @EnvironmentObject private var syncService: PeerSyncService
+    @EnvironmentObject private var deepLinks: DeepLinkCoordinator
 
     // Scope + query state
     @AppStorage("searchScope") private var scopeRaw: String = SearchScope.all.rawValue
@@ -138,10 +139,20 @@ struct MobileSearchView: View {
             .onChange(of: filter.grayscaleOnly) { _, _ in debouncedSearch() }
             .onChange(of: filter.yearRange) { _, _ in debouncedSearch() }
             .onChange(of: sortNewestFirst) { _, _ in debouncedSearch() }
+            // Deep-link hook: a face chip in photo detail asked for a
+            // People-scope filter by name. The tab view has already flipped
+            // scope+tab for us; here we just drop the name into `query`
+            // which triggers the normal debounced search pipeline.
+            .onChange(of: deepLinks.pendingSearchQuery) { _, newValue in
+                guard let q = newValue, !q.isEmpty else { return }
+                query = q
+                deepLinks.clearSearchQuery()
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: HPSpacing.md) {
                         Button {
+                            HPHaptic.light()
                             showFilterSheet = true
                         } label: {
                             Image(systemName: filter.isActive
@@ -152,6 +163,7 @@ struct MobileSearchView: View {
 
                         if scope == .all || scope == .places {
                             Button {
+                                HPHaptic.selection()
                                 withAnimation(HPAnimation.cardSpring) {
                                     useCompactGrid.toggle()
                                 }
@@ -178,6 +190,7 @@ struct MobileSearchView: View {
                     heroNamespace: heroNamespace
                 )
                 .environmentObject(syncService)
+                .environmentObject(deepLinks)
             }
             .hapticToast($toast)
             .task(id: scopeRaw) {
@@ -367,6 +380,7 @@ struct MobileSearchView: View {
                                 .background(
                                     Circle().fill(SearchScope.cameras.accent.opacity(0.15))
                                 )
+                                .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(cam.model)
                                     .font(HPFont.cardTitle)
@@ -386,6 +400,7 @@ struct MobileSearchView: View {
                                 .background(Capsule().fill(HPColor.chipInactive))
                         }
                         .padding(.vertical, 4)
+                        .accessibilityElement(children: .combine)
                     }
                 }
             }
@@ -428,6 +443,7 @@ struct MobileSearchView: View {
                                         .background(
                                             Circle().fill(SearchScope.dates.accent.opacity(0.15))
                                         )
+                                        .accessibilityHidden(true)
                                     Text(monthName(bucket.month))
                                         .font(HPFont.cardTitle)
                                     Spacer()
@@ -439,6 +455,7 @@ struct MobileSearchView: View {
                                         .background(Capsule().fill(HPColor.chipInactive))
                                 }
                                 .padding(.vertical, 4)
+                                .accessibilityElement(children: .combine)
                             }
                         }
                     }
@@ -475,6 +492,7 @@ struct MobileSearchView: View {
                             .foregroundStyle(.secondary)
                         Spacer()
                         Button("Clear") {
+                            HPHaptic.light()
                             withAnimation(HPAnimation.fadeIn) {
                                 clearRecentSearches()
                             }
@@ -563,12 +581,14 @@ struct MobileSearchView: View {
         HStack(spacing: HPSpacing.xs) {
             Image(systemName: icon)
                 .font(HPFont.metaLabel)
+                .accessibilityHidden(true)
             Text(label)
                 .font(HPFont.chipLabel)
             Button { onRemove() } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(HPFont.metaLabel)
             }
+            .accessibilityLabel("Remove \(label) filter")
         }
         .padding(.horizontal, HPSpacing.md)
         .padding(.vertical, 10)
@@ -587,6 +607,7 @@ struct MobileSearchView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button {
+                    HPHaptic.selection()
                     sortNewestFirst.toggle()
                 } label: {
                     HStack(spacing: HPSpacing.xxs + 1) {
@@ -634,6 +655,7 @@ struct MobileSearchView: View {
                     .font(HPFont.body)
                     .foregroundStyle(.secondary)
                 Button("Clear Filters") {
+                    HPHaptic.light()
                     filter = MobileSearchFilter()
                 }
                 .font(HPFont.body)
@@ -679,6 +701,7 @@ struct MobileSearchView: View {
 
             if photos.count >= resultLimit {
                 Button("Load more results") {
+                    HPHaptic.light()
                     resultLimit += 100
                     Task { await runScopedSearch() }
                 }
@@ -798,7 +821,10 @@ private struct PersonResultsView: View {
                         ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
                             MobilePhotoCell(photo: photo)
                                 .aspectRatio(1, contentMode: .fill)
-                                .onTapGesture { selectedPhotoIndex = index }
+                                .onTapGesture {
+                                    HPHaptic.light()
+                                    selectedPhotoIndex = index
+                                }
                                 .photoContextMenu(photo: photo, onCurate: { state in
                                     Task {
                                         guard let db = appDatabase else { return }
@@ -858,7 +884,10 @@ private struct CameraResultsView: View {
                         ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
                             MobilePhotoCell(photo: photo)
                                 .aspectRatio(1, contentMode: .fill)
-                                .onTapGesture { selectedPhotoIndex = index }
+                                .onTapGesture {
+                                    HPHaptic.light()
+                                    selectedPhotoIndex = index
+                                }
                                 .photoContextMenu(photo: photo, onCurate: { state in
                                     Task {
                                         guard let db = appDatabase else { return }
@@ -926,7 +955,10 @@ private struct DateBucketResultsView: View {
                         ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
                             MobilePhotoCell(photo: photo)
                                 .aspectRatio(1, contentMode: .fill)
-                                .onTapGesture { selectedPhotoIndex = index }
+                                .onTapGesture {
+                                    HPHaptic.light()
+                                    selectedPhotoIndex = index
+                                }
                                 .photoContextMenu(photo: photo, onCurate: { state in
                                     Task {
                                         guard let db = appDatabase else { return }
@@ -1128,6 +1160,7 @@ private struct SearchFilterSheet: View {
                 Section("Curation State") {
                     ForEach(CurationState.allCases) { state in
                         Button {
+                            HPHaptic.selection()
                             if filter.curationStates.contains(state) {
                                 filter.curationStates.remove(state)
                             } else {
@@ -1196,11 +1229,17 @@ private struct SearchFilterSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if filter.isActive {
-                        Button("Clear All") { filter = MobileSearchFilter() }
+                        Button("Clear All") {
+                            HPHaptic.light()
+                            filter = MobileSearchFilter()
+                        }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("Done") {
+                        HPHaptic.light()
+                        dismiss()
+                    }
                         .fontWeight(.semibold)
                 }
             }

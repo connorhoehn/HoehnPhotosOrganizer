@@ -8,6 +8,9 @@ struct HoehnPhotosMobileApp: App {
     @StateObject private var syncService = PeerSyncService()
     @StateObject private var cloudSyncEngine: CloudSyncEngine
     @StateObject private var auth = AuthEnvironment()
+    /// App-level coordinator used by in-view surfaces (e.g. the face chip
+    /// strip in photo detail) to request a Search-tab scope+query switch.
+    @StateObject private var deepLinks = DeepLinkCoordinator()
 
     /// AWS cloud-sync plumbing. Held as plain `let`s because `AWSPhotoSyncClient`
     /// and `CloudPushCoordinator` are actors — SwiftUI observation does not
@@ -83,6 +86,7 @@ struct HoehnPhotosMobileApp: App {
                         .environmentObject(syncService)
                         .environmentObject(cloudSyncEngine)
                         .environmentObject(auth)
+                        .environmentObject(deepLinks)
                         .onAppear {
                             // Hook UIApplication for silent remote pushes.
                             // Safe to call every appear — UIKit coalesces.

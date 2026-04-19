@@ -45,6 +45,7 @@ struct PhotoTile: View {
                         .foregroundStyle(.white, HPColor.chipActive)
                         .padding(HPSpacing.xs)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .accessibilityHidden(true)
                 }
 
                 if let overlayBadge {
@@ -65,6 +66,16 @@ struct PhotoTile: View {
             withAnimation(HPMotion.chipPop) { pressed = p }
         })
         .animation(HPMotion.snappy, value: isSelected)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(defaultAccessibilityLabel)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var defaultAccessibilityLabel: String {
+        var parts: [String] = ["Photo"]
+        if let overlayBadge { parts.append(overlayBadge) }
+        return parts.joined(separator: ", ")
     }
 }
 

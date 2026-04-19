@@ -99,6 +99,7 @@ struct MobilePeopleView: View {
                                             }
                                     }
                                     .buttonStyle(.plain)
+                                    .simultaneousGesture(TapGesture().onEnded { HPHaptic.light() })
                                     .contextMenu {
                                         Button {
                                             UIPasteboard.general.string = person.name
@@ -129,6 +130,7 @@ struct MobilePeopleView: View {
                         Image(systemName: "arrow.up.arrow.down")
                     }
                     .accessibilityLabel("Sort order")
+                    .sensoryFeedback(.selection, trigger: sortOrder)
                 }
             }
             .task {
@@ -161,6 +163,7 @@ struct MobilePeopleView: View {
                     .foregroundStyle(.white)
                     .padding(HPSpacing.sm)
                     .background(HPColor.needsReview, in: Circle())
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(unnamedClusterCount) to review")
@@ -173,6 +176,7 @@ struct MobilePeopleView: View {
                 Image(systemName: "chevron.right")
                     .foregroundStyle(.secondary)
                     .font(.callout.weight(.semibold))
+                    .accessibilityHidden(true)
             }
             .padding(HPSpacing.md)
             .background(
@@ -185,6 +189,9 @@ struct MobilePeopleView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(unnamedClusterCount) faces to review. Name unknown faces.")
+        .accessibilityHint("Opens the face review flow")
     }
 
     // MARK: - Person Cell
@@ -294,6 +301,7 @@ private struct PersonCardView: View {
             }
             .frame(width: imageSize, height: imageSize)
             .clipShape(Circle())
+            .accessibilityHidden(true)
 
             VStack(spacing: HPSpacing.xxs) {
                 Text(person.name)
@@ -358,7 +366,10 @@ struct MobilePersonDetailView: View {
                             ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
                                 MobilePhotoCell(photo: photo)
                                     .aspectRatio(1, contentMode: .fill)
-                                    .onTapGesture { selectedPhotoIndex = index }
+                                    .onTapGesture {
+                                        HPHaptic.light()
+                                        selectedPhotoIndex = index
+                                    }
                                     .photoContextMenu(photo: photo, onCurate: { state in
                                         Task {
                                             guard let db = appDatabase else { return }
@@ -409,6 +420,7 @@ struct MobilePersonDetailView: View {
             }
             .frame(width: 120, height: 120)
             .clipShape(Circle())
+            .accessibilityHidden(true)
 
             Text("\(photos.count) photo\(photos.count == 1 ? "" : "s")")
                 .font(HPFont.body)

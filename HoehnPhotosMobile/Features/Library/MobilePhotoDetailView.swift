@@ -67,13 +67,15 @@ struct MobilePhotoDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appDatabase) private var appDatabase
     @EnvironmentObject private var syncService: PeerSyncService
+    @EnvironmentObject private var deepLinks: DeepLinkCoordinator
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // Image state
     @State private var image: UIImage?
 
-    // Phase 4 — Face strip toast (placeholder actions until face-naming ships)
+    // Face strip toast (name-save success / error, plus legacy fallback
+    // logs for the named-chip path when no DeepLinkCoordinator is present).
     @State private var facesToast: ToastMessage?
 
     // Phase 4 — Similar photos push target. When the user taps a similar
@@ -207,11 +209,15 @@ struct MobilePhotoDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
+                    Button("Done") {
+                        HPHaptic.light()
+                        dismiss()
+                    }
                         .foregroundStyle(.white)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        HPHaptic.light()
                         showMetadata = true
                     } label: {
                         Image(systemName: "info.circle")
@@ -235,6 +241,7 @@ struct MobilePhotoDetailView: View {
                 if let p = pushedSimilarPhoto {
                     MobilePhotoDetailView(photos: [p], initialIndex: 0)
                         .environmentObject(syncService)
+                        .environmentObject(deepLinks)
                 }
             }
         }
@@ -255,6 +262,7 @@ struct MobilePhotoDetailView: View {
                         )
                         .id(item.offset)
                         .onTapGesture {
+                            HPHaptic.selection()
                             withAnimation(.easeInOut(duration: 0.15)) {
                                 currentIndex = item.offset
                             }
@@ -514,7 +522,13 @@ struct MobilePhotoDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     // Phase 4 — Face chips strip (above the EXIF grid)
-                    PhotoFacesStrip(photo: photo, toast: $facesToast)
+                    PhotoFacesStrip(photo: photo, toast: $facesToast) { personName in
+                        // Named chip tap: ask the app-level coordinator to
+                        // switch to the Search tab + People scope and run a
+                        // query for this name. The tab view handles the
+                        // sheet-dismiss + scope flip.
+                        deepLinks.requestPeopleFilter(name: personName)
+                    }
 
                     // EXIF rows
                     let exif = parseExif(photo.rawExifJson) ?? [:]
@@ -622,6 +636,7 @@ struct MobilePhotoDetailView: View {
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 16)
+                            .accessibilityAddTraits(.isHeader)
 
                         // Phase 4 — Inline map tile for photos with GPS.
                         if let coord = photo.gpsCoordinate {
@@ -663,6 +678,7 @@ struct MobilePhotoDetailView: View {
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 16)
+                        .accessibilityAddTraits(.isHeader)
                     VStack(spacing: 0) {
                         // TODO: Curation is an app-state value, not a raw EXIF
                         // field — copying it is allowed but slightly odd.
@@ -702,7 +718,10 @@ struct MobilePhotoDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { showMetadata = false }
+                    Button("Done") {
+                        HPHaptic.light()
+                        showMetadata = false
+                    }
                 }
             }
             .hapticToast($facesToast)

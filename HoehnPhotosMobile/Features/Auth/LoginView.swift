@@ -38,12 +38,14 @@ struct LoginView: View {
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
                         .padding(.bottom, HPSpacing.sm)
+                        .accessibilityHidden(true)
 
                     Text("HoehnPhotos")
                         .font(.system(size: 44, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .tracking(-0.8)
                         .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+                        .accessibilityAddTraits(.isHeader)
 
                     Text("Your library, organized beautifully.")
                         .font(HPFont.cardSubtitle)
@@ -85,6 +87,7 @@ struct LoginView: View {
 
     private var primaryButton: some View {
         Button {
+            HPHaptic.medium()
             Task { await startSignIn() }
         } label: {
             HStack(spacing: HPSpacing.sm) {
@@ -93,6 +96,7 @@ struct LoginView: View {
                 } else {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 16, weight: .semibold))
+                        .accessibilityHidden(true)
                 }
                 Text(isSigningIn ? "Signing in…" : "Sign in")
                     .font(.system(size: 17, weight: .semibold))
@@ -114,6 +118,8 @@ struct LoginView: View {
         .disabled(isSigningIn)
         .scaleEffect(isSigningIn ? 0.98 : 1.0)
         .animation(HPAnimation.cardSpring, value: isSigningIn)
+        .accessibilityLabel(isSigningIn ? "Signing in" : "Sign in")
+        .accessibilityHint("Starts the sign-in flow")
     }
 
     private func errorBanner(_ msg: String) -> some View {
@@ -122,6 +128,7 @@ struct LoginView: View {
                 .foregroundStyle(HPColor.reject)
                 .font(.system(size: 14, weight: .semibold))
                 .padding(.top, 2)
+                .accessibilityHidden(true)
             Text(msg)
                 .font(HPFont.cardSubtitle)
                 .foregroundStyle(.white.opacity(0.9))
@@ -144,6 +151,7 @@ struct LoginView: View {
     #if DEBUG
     private var debugSkipButton: some View {
         Button {
+            HPHaptic.light()
             Task {
                 await auth.setSession(
                     idToken: "demo",

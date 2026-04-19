@@ -97,6 +97,7 @@ struct MobileSyncView: View {
                         }
                     }
                     Button {
+                        HPHaptic.medium()
                         isLoading = true
                         if let db = appDatabase {
                             try? db.reload()
@@ -138,16 +139,19 @@ struct MobileSyncView: View {
             Section {
                 if case .idle = syncService.state {
                     Button("Start Searching") {
+                        HPHaptic.light()
                         syncService.start()
                     }
                     .foregroundStyle(Color.accentColor)
                 } else if case .completed = syncService.state {
                     Button("Search Again") {
+                        HPHaptic.light()
                         syncService.stop()
                         syncService.start()
                     }
                 } else {
                     Button("Stop") {
+                        HPHaptic.medium()
                         syncService.stop()
                     }
                     .foregroundStyle(.red)

@@ -75,6 +75,7 @@ struct MobileCloudSyncView: View {
                     }
                 }
             ))
+            .sensoryFeedback(.selection, trigger: cloudKitEnabled)
         } header: {
             Text("iCloud")
         } footer: {
@@ -127,6 +128,7 @@ struct MobileCloudSyncView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Button("Open Settings") {
+                HPHaptic.light()
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
@@ -184,6 +186,7 @@ struct MobileCloudSyncView: View {
             HStack(spacing: 10) {
                 Image(systemName: "arrow.up.circle.fill")
                     .foregroundStyle(.blue)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Uploading changes...")
                         .font(.subheadline)
@@ -194,11 +197,13 @@ struct MobileCloudSyncView: View {
                     .font(.caption.monospaced().bold())
                     .foregroundStyle(.blue)
             }
+            .accessibilityElement(children: .combine)
 
         case .pulling(let progress):
             HStack(spacing: 10) {
                 Image(systemName: "arrow.down.circle.fill")
                     .foregroundStyle(.blue)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Downloading updates...")
                         .font(.subheadline)
@@ -209,6 +214,7 @@ struct MobileCloudSyncView: View {
                     .font(.caption.monospaced().bold())
                     .foregroundStyle(.blue)
             }
+            .accessibilityElement(children: .combine)
 
         case .error(let message):
             VStack(alignment: .leading, spacing: 6) {
@@ -218,6 +224,7 @@ struct MobileCloudSyncView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            .accessibilityElement(children: .combine)
         }
     }
 
@@ -227,8 +234,10 @@ struct MobileCloudSyncView: View {
     private var controlsSection: some View {
         Section {
             Toggle("Auto-sync", isOn: $autoSyncEnabled)
+                .sensoryFeedback(.selection, trigger: autoSyncEnabled)
 
             Button {
+                HPHaptic.light()
                 Task { await cloudSync.sync() }
             } label: {
                 HStack {
@@ -268,6 +277,7 @@ struct MobileCloudSyncView: View {
                         Image(systemName: event.succeeded ? "checkmark.circle" : "xmark.circle")
                             .foregroundStyle(event.succeeded ? .green : .red)
                             .font(.caption)
+                            .accessibilityLabel(event.succeeded ? "Succeeded" : "Failed")
                         VStack(alignment: .leading, spacing: 2) {
                             Text(event.summary)
                                 .font(.caption)
@@ -277,6 +287,7 @@ struct MobileCloudSyncView: View {
                         }
                         Spacer()
                     }
+                    .accessibilityElement(children: .combine)
                 }
             }
         }

@@ -37,6 +37,7 @@ struct MeshBackdrop: View {
             )
         }
         .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 }
 

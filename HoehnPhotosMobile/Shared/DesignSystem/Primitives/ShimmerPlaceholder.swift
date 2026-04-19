@@ -32,6 +32,7 @@ struct ShimmerPlaceholder: View {
                 phase = 1
             }
         }
+        .accessibilityHidden(true)
     }
 }
 

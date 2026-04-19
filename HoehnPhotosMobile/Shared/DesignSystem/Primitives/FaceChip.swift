@@ -62,6 +62,30 @@ struct FaceChip: View {
         .onLongPressGesture(minimumDuration: 0, perform: {}, onPressingChanged: { p in
             withAnimation(HPMotion.chipPop) { pressed = p }
         })
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityHint(accessibilityHintText)
+        .accessibilityAddTraits(accessibilityTraits)
+    }
+
+    private var accessibilityLabelText: String {
+        if isUnknown {
+            return "Unknown face"
+        }
+        return "Face of \(name ?? "")"
+    }
+
+    private var accessibilityHintText: String {
+        if isUnknown {
+            return "Double tap to open naming sheet"
+        }
+        return "Double tap to view photos of \(name ?? "")"
+    }
+
+    private var accessibilityTraits: AccessibilityTraits {
+        var traits: AccessibilityTraits = .isButton
+        if isSelected { traits.insert(.isSelected) }
+        return traits
     }
 
     private var ringColor: Color {

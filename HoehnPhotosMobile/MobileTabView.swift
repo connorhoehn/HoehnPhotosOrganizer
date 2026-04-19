@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import HoehnPhotosCore
 
 // MARK: - MobileTabView
@@ -7,10 +8,17 @@ struct MobileTabView: View {
 
     @EnvironmentObject private var syncService: PeerSyncService
     @EnvironmentObject private var cloudSync: CloudSyncEngine
+    @EnvironmentObject private var deepLinks: DeepLinkCoordinator
     @Environment(\.appDatabase) private var appDatabase
     @State private var selectedTab: MobileTab = .library
     @State private var openJobCount: Int = 0
     @State private var showSettings: Bool = false
+
+    /// Mirrors `@AppStorage("searchScope")` so we can programmatically flip
+    /// to the People scope when a deep-link request arrives from inside
+    /// photo detail. The MobileSearchView owns the same key via its own
+    /// `@AppStorage` binding, so the two stay in sync automatically.
+    @AppStorage("searchScope") private var searchScopeRaw: String = SearchScope.all.rawValue
 
     /// Show the CloudKit bar when cloud sync is active (non-idle or has pending changes);
     /// fall back to the legacy Multipeer bar when peer sync is in progress.
@@ -73,6 +81,30 @@ struct MobileTabView: View {
             }
             .onChange(of: selectedTab) { _ in
                 Task { await loadOpenJobCount() }
+            }
+            // Deep-link: a face-chip inside photo-detail asked us to filter
+            // Search by person name. Close any presented sheets first (so
+            // the tab switch is visible), flip scope+tab, then hand the
+            // query to MobileSearchView via `pendingSearchQuery`.
+            .onChange(of: deepLinks.pendingPeopleQuery) { newValue in
+                guard let name = newValue, !name.isEmpty else { return }
+                // Dismiss the whole presented-sheet stack (photo detail
+                // may itself be presenting the metadata sheet, which hosts
+                // the face chip that fired this request). Calling dismiss
+                // on the ROOT presenter tears down the entire chain.
+                for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+                    for window in scene.windows {
+                        if let root = window.rootViewController,
+                           root.presentedViewController != nil {
+                            root.dismiss(animated: true)
+                        }
+                    }
+                }
+
+                searchScopeRaw = SearchScope.people.rawValue
+                selectedTab = .search
+                deepLinks.pendingSearchQuery = name
+                deepLinks.clearPeopleQuery()
             }
         }
     }

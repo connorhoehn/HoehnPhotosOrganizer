@@ -71,6 +71,7 @@ struct PeopleReviewView: View {
                     .background(.ultraThinMaterial, in: Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close review")
 
             Spacer()
 
@@ -83,6 +84,8 @@ struct PeopleReviewView: View {
                     .foregroundStyle(.white.opacity(0.75))
                     .contentTransition(.numericText())
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -91,6 +94,7 @@ struct PeopleReviewView: View {
                 .padding(HPSpacing.sm)
                 .background(.ultraThinMaterial, in: Circle())
                 .foregroundStyle(.primary)
+                .accessibilityHidden(true)
         }
     }
 
@@ -115,6 +119,7 @@ struct PeopleReviewView: View {
                 .font(.system(size: 54))
                 .foregroundStyle(HPColor.keeper)
                 .symbolEffect(.bounce, value: queue.count)
+                .accessibilityHidden(true)
             Text("All caught up")
                 .font(HPFont.screenTitle)
                 .foregroundStyle(.white)
@@ -124,6 +129,7 @@ struct PeopleReviewView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, HPSpacing.xxxl)
+        .accessibilityElement(children: .combine)
     }
 
     private func mergePicker(for clusterId: String) -> some View {
@@ -136,6 +142,7 @@ struct PeopleReviewView: View {
                 } else {
                     ForEach(namedPeople) { person in
                         Button {
+                            HPHaptic.medium()
                             Task { await merge(clusterId: clusterId, into: person) }
                         } label: {
                             HStack {
@@ -153,7 +160,10 @@ struct PeopleReviewView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Cancel") { mergeTargetForClusterId = nil }
+                    Button("Cancel") {
+                        HPHaptic.light()
+                        mergeTargetForClusterId = nil
+                    }
                 }
             }
         }

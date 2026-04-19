@@ -67,6 +67,7 @@ struct MobileLibraryView: View {
                 if isSelecting {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
+                            HPHaptic.selection()
                             if selectedPhotoIDs.count == allPhotos.count {
                                 selectedPhotoIDs.removeAll()
                             } else {
@@ -79,6 +80,7 @@ struct MobileLibraryView: View {
                 } else {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
+                            HPHaptic.light()
                             Task { await reloadAndFetch() }
                         } label: {
                             Image(systemName: "arrow.clockwise")
@@ -88,6 +90,7 @@ struct MobileLibraryView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        HPHaptic.selection()
                         withAnimation {
                             isSelecting.toggle()
                             if !isSelecting { selectedPhotoIDs.removeAll() }
@@ -99,6 +102,7 @@ struct MobileLibraryView: View {
                 if !isSelecting {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
+                            HPHaptic.light()
                             showActivity = true
                         } label: {
                             Image(systemName: "clock")
@@ -107,6 +111,7 @@ struct MobileLibraryView: View {
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
+                            HPHaptic.selection()
                             showStaged.toggle()
                             Task { await resetAndLoad() }
                         } label: {
@@ -116,6 +121,7 @@ struct MobileLibraryView: View {
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
+                            HPHaptic.light()
                             showSettings = true
                         } label: {
                             Image(systemName: "gearshape")
@@ -199,6 +205,7 @@ struct MobileLibraryView: View {
             }
 
             Button {
+                HPHaptic.light()
                 Task { await reloadAndFetch() }
             } label: {
                 Label("Reload Database", systemImage: "arrow.clockwise")
@@ -221,6 +228,7 @@ struct MobileLibraryView: View {
                             selectedPhotoIDs: selectedPhotoIDs,
                             onTapPhoto: { photo in handlePhotoTap(photo) },
                             onToggleExpand: {
+                                HPHaptic.selection()
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     if expandedMonths.contains(section.monthKey) {
                                         expandedMonths.remove(section.monthKey)
@@ -285,6 +293,7 @@ struct MobileLibraryView: View {
             HStack(spacing: 0) {
                 Spacer()
                 Button {
+                    HPHaptic.heavy()
                     Task { await batchCurate(.keeper) }
                 } label: {
                     VStack(spacing: HPSpacing.xs) {
@@ -296,6 +305,7 @@ struct MobileLibraryView: View {
                 .accessibilityLabel("Keep \(selectedPhotoIDs.count) photos")
                 Spacer()
                 Button {
+                    HPHaptic.heavy()
                     Task { await batchCurate(.archive) }
                 } label: {
                     VStack(spacing: HPSpacing.xs) {
@@ -307,6 +317,7 @@ struct MobileLibraryView: View {
                 .accessibilityLabel("Archive \(selectedPhotoIDs.count) photos")
                 Spacer()
                 Button {
+                    HPHaptic.heavy()
                     Task { await batchCurate(.rejected) }
                 } label: {
                     VStack(spacing: HPSpacing.xs) {
@@ -506,9 +517,11 @@ struct MobilePhotoCell: View {
                         .foregroundStyle(.white)
                         .padding(HPSpacing.sm)
                 }
+                .accessibilityHidden(true)
             }
         }
         .clipped()
+        .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityPhotoLabel)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .task(id: photo.id) {

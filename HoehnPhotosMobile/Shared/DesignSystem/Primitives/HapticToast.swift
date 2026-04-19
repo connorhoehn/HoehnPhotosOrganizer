@@ -57,6 +57,7 @@ struct HapticToast: View {
                     .font(.title3)
                     .foregroundStyle(message.kind.tint)
                     .symbolEffect(.bounce, value: message.id)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(message.title).font(HPFont.cardTitle)
                     if let subtitle = message.subtitle {
@@ -69,6 +70,15 @@ struct HapticToast: View {
             .padding(.vertical, HPSpacing.md)
         }
         .sensoryFeedback(message.kind.feedback, trigger: message.id)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(toastAccessibilityLabel)
+    }
+
+    private var toastAccessibilityLabel: String {
+        if let subtitle = message.subtitle {
+            return "\(message.title). \(subtitle)"
+        }
+        return message.title
     }
 }
 

@@ -170,7 +170,7 @@ struct BentoSectionView: View {
             curationColor: nil,
             overlayBadge: "+\(photos.count - 5) more",
             onTap: {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                // PhotoTile emits .light() on tap; no extra haptic here.
                 onToggleExpand()
             }
         )

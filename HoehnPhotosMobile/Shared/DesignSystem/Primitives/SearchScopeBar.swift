@@ -77,6 +77,7 @@ private struct ScopeButton: View {
                 Image(systemName: scope.systemImage)
                     .font(.caption.weight(.semibold))
                     .symbolRenderingMode(.hierarchical)
+                    .accessibilityHidden(true)
                 Text(scope.title)
                     .font(isActive ? HPFont.chipLabelActive : HPFont.chipLabel)
             }
@@ -96,6 +97,10 @@ private struct ScopeButton: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(scope.title)
+        .accessibilityHint("Filters search to \(scope.title.lowercased())")
+        .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
     }
 }
 

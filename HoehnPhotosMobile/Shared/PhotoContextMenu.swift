@@ -45,6 +45,7 @@ struct PhotoContextMenu: ViewModifier {
             if let onViewDetails {
                 Section {
                     Button {
+                        HPHaptic.light()
                         onViewDetails()
                     } label: {
                         Label("View Details", systemImage: "info.circle")

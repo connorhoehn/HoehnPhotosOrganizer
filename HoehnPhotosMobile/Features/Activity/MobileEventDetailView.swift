@@ -40,7 +40,10 @@ struct MobileEventDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("Done") {
+                        HPHaptic.light()
+                        dismiss()
+                    }
                 }
             }
             .task { await loadThumbnail() }
@@ -59,6 +62,7 @@ struct MobileEventDetailView: View {
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
             }
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(event.title)
@@ -70,6 +74,8 @@ struct MobileEventDetailView: View {
                     .padding(.vertical, 2)
                     .background(Capsule().fill(Color.secondary.opacity(0.15)))
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
 
             Spacer()
         }
@@ -129,6 +135,7 @@ struct MobileEventDetailView: View {
                 Image(systemName: "clock")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
                 Text(event.occurredAt, style: .relative)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -137,6 +144,7 @@ struct MobileEventDetailView: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Helpers

@@ -112,6 +112,7 @@ struct MobileActivityView: View {
 
                         if events.count >= eventLimit {
                             Button {
+                                HPHaptic.light()
                                 eventLimit += 50
                                 Task { await loadEvents() }
                             } label: {
@@ -135,6 +136,7 @@ struct MobileActivityView: View {
     private func eventRows(_ events: [ActivityEvent]) -> some View {
         ForEach(events, id: \.id) { event in
             Button {
+                HPHaptic.light()
                 selectedEvent = event
             } label: {
                 HStack(spacing: HPSpacing.md) {
@@ -142,6 +144,7 @@ struct MobileActivityView: View {
                         .foregroundStyle(HPColor.chipActive)
                         .frame(width: 28, height: 28)
                         .background(Circle().fill(HPColor.chipActive.opacity(0.2)))
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: HPSpacing.xxs) {
                         Text(event.title).font(HPFont.body)
                         if let detail = event.detail {
