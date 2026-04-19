@@ -828,22 +828,24 @@ struct DrivePhotoGridView: View {
             }
         }
         .background(
-            Group {
-                Button("") { selectedPhotoIDs = Set(displayPhotos.map(\.photo.id)) }
-                    .keyboardShortcut("a", modifiers: .command)
-                Button("") {
-                    selectedPhotoIDs = []
-                    selectedPhoto = nil
-                }
-                .keyboardShortcut(.escape, modifiers: [])
-            }
-            .hidden()
+            keyboardShortcutButtons.hidden()
         )
         // Tap on the scroll background (outside any cell) clears selection
         .onTapGesture {
             selectedPhotoIDs = []
             selectedPhoto = nil
         }
+    }
+
+    @ViewBuilder
+    private var keyboardShortcutButtons: some View {
+        Button("") { selectedPhotoIDs = Set(displayPhotos.map(\.photo.id)) }
+            .keyboardShortcut("a", modifiers: .command)
+        Button("") {
+            selectedPhotoIDs = []
+            selectedPhoto = nil
+        }
+        .keyboardShortcut(.escape, modifiers: [])
     }
 
     private func rubberBandRect(start: CGPoint, end: CGPoint) -> CGRect {

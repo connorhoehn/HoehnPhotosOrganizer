@@ -39,12 +39,31 @@ struct AdjustmentLayer: Codable, Identifiable, Equatable {
     var adjustmentSummary: String {
         var parts: [String] = []
         let a = adjustments
-        if abs(a.exposure) > 0.01 { parts.append("Exp \(a.exposure > 0 ? "+" : "")\(String(format: "%.1f", a.exposure))") }
-        if a.contrast != 0 { parts.append("Con \(a.contrast > 0 ? "+" : "")\(a.contrast)") }
-        if a.highlights != 0 { parts.append("Hi \(a.highlights > 0 ? "+" : "")\(a.highlights)") }
-        if a.shadows != 0 { parts.append("Sh \(a.shadows > 0 ? "+" : "")\(a.shadows)") }
-        if a.saturation != 0 { parts.append("Sat \(a.saturation > 0 ? "+" : "")\(a.saturation)") }
-        if a.vibrance != 0 { parts.append("Vib \(a.vibrance > 0 ? "+" : "")\(a.vibrance)") }
+        if abs(a.exposure) > 0.01 {
+            let sign = a.exposure > 0 ? "+" : ""
+            let value = String(format: "%.1f", a.exposure)
+            parts.append("Exp \(sign)\(value)")
+        }
+        if a.contrast != 0 {
+            let sign = a.contrast > 0 ? "+" : ""
+            parts.append("Con \(sign)\(a.contrast)")
+        }
+        if a.highlights != 0 {
+            let sign = a.highlights > 0 ? "+" : ""
+            parts.append("Hi \(sign)\(a.highlights)")
+        }
+        if a.shadows != 0 {
+            let sign = a.shadows > 0 ? "+" : ""
+            parts.append("Sh \(sign)\(a.shadows)")
+        }
+        if a.saturation != 0 {
+            let sign = a.saturation > 0 ? "+" : ""
+            parts.append("Sat \(sign)\(a.saturation)")
+        }
+        if a.vibrance != 0 {
+            let sign = a.vibrance > 0 ? "+" : ""
+            parts.append("Vib \(sign)\(a.vibrance)")
+        }
         return parts.isEmpty ? "No adjustments" : parts.prefix(3).joined(separator: " · ")
     }
 }

@@ -53,7 +53,8 @@ actor DuplicateDetectionService {
                 guard !assignedToGroup.contains(j) else { continue }
                 let jDate = candidates[j].captureDate
                 // Only compare within ±2 hour window
-                guard abs(jDate.timeIntervalSince(anchorDate)) <= windowHours * 3600 else { break }
+                let deltaSeconds: Double = abs(jDate.timeIntervalSince(anchorDate))
+                guard deltaSeconds <= Double(windowHours) * 3600.0 else { break }
 
                 guard
                     let printA = try? featurePrint(for: URL(fileURLWithPath: candidates[i].proxyPath)),

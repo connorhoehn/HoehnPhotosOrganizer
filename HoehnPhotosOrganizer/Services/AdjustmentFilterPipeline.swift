@@ -18,7 +18,7 @@ struct AdjustmentFilterPipeline {
         mci = applyTemperatureTint(mci, temperature: mAdj.temperature, tint: mAdj.tint)
 
         // Exposure
-        if abs(mAdj.exposure) > 0.01 {
+        if abs(Double(mAdj.exposure)) > 0.01 {
             let f = CIFilter(name: "CIExposureAdjust")!
             f.setValue(mci, forKey: kCIInputImageKey)
             f.setValue(Float(mAdj.exposure), forKey: "inputEV")
@@ -63,7 +63,7 @@ struct AdjustmentFilterPipeline {
     /// CITemperatureAndTint: map temperature -100..+100 to 3000K..10000K (neutral 6500K).
     /// Tint maps -100..+100 to green/magenta shift on targetNeutral.
     static func applyTemperatureTint(_ ci: CIImage, temperature: Double, tint: Double) -> CIImage {
-        guard abs(temperature) > 0.5 || abs(tint) > 0.5 else { return ci }
+        guard abs(Double(temperature)) > 0.5 || abs(Double(tint)) > 0.5 else { return ci }
         guard let f = CIFilter(name: "CITemperatureAndTint") else { return ci }
         // Map slider -100..+100 to Kelvin offset: neutral is 6500K, range 3000K..10000K
         let kelvin = 6500.0 + temperature * 35.0  // -100->3000, +100->10000
@@ -212,10 +212,10 @@ struct AdjustmentFilterPipeline {
     /// Standard approach used in Lightroom/Camera Raw — large radius (30px),
     /// low intensity, blended proportionally to the clarity amount.
     static func applyClarity(_ ci: CIImage, amount: Double) -> CIImage {
-        guard abs(amount) > 0.5 else { return ci }
+        guard abs(Double(amount)) > 0.5 else { return ci }
         guard let f = CIFilter(name: "CIUnsharpMask") else { return ci }
-        let radius = 30.0
-        let intensity = abs(amount) / 100.0 * 0.6  // max 0.6 to avoid halos
+        let radius: Double = 30.0
+        let intensity: Double = abs(Double(amount)) / 100.0 * 0.6  // max 0.6 to avoid halos
         f.setValue(ci, forKey: kCIInputImageKey)
         f.setValue(radius, forKey: kCIInputRadiusKey)
         f.setValue(intensity, forKey: kCIInputIntensityKey)
@@ -225,7 +225,7 @@ struct AdjustmentFilterPipeline {
             return sharpened
         } else {
             // Negative clarity: blend with a blurred version for softness
-            let blurred = ci.applyingGaussianBlur(sigma: 10.0 * abs(amount) / 100.0)
+            let blurred = ci.applyingGaussianBlur(sigma: 10.0 * abs(Double(amount)) / 100.0)
                 .cropped(to: ci.extent)
             return blurred
         }
@@ -236,7 +236,7 @@ struct AdjustmentFilterPipeline {
     /// Combination of shadow-region contrast boost + saturation increase.
     /// Positive values cut haze; negative adds atmospheric effect.
     static func applyDehaze(_ ci: CIImage, amount: Double) -> CIImage {
-        guard abs(amount) > 0.5 else { return ci }
+        guard abs(Double(amount)) > 0.5 else { return ci }
         let norm = Float(amount) / 100.0
 
         let contrastBoost = Float(1.0 + Double(norm) * 0.15)
