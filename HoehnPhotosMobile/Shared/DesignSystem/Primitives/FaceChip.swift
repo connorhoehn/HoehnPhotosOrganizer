@@ -83,9 +83,7 @@ struct FaceChip: View {
     }
 
     private var accessibilityTraits: AccessibilityTraits {
-        var traits: AccessibilityTraits = .isButton
-        if isSelected { traits.insert(.isSelected) }
-        return traits
+        isSelected ? [.isButton, .isSelected] : .isButton
     }
 
     private var ringColor: Color {

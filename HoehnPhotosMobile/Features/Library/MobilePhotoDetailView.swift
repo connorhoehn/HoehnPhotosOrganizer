@@ -501,6 +501,7 @@ struct MobilePhotoDetailView: View {
                 Image(systemName: icon)
                     .font(.system(size: 22))
                     .symbolEffect(.bounce, value: reduceMotion ? false : (currentState == state))
+                    .accessibilityHidden(true)
                 Text(label)
                     .font(.caption2)
                     .minimumScaleFactor(0.7)
@@ -512,7 +513,9 @@ struct MobilePhotoDetailView: View {
             .accessibilityElement(children: .combine)
         }
         .accessibilityLabel(label)
+        .accessibilityValue(currentState == state ? "Selected" : "Not selected")
         .accessibilityHint("Double tap to mark this photo as \(label)")
+        .accessibilityAddTraits(currentState == state ? [.isButton, .isSelected] : .isButton)
     }
 
     // MARK: - Metadata Sheet
