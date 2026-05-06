@@ -469,7 +469,7 @@ public actor AWSPullCoordinator {
     // local edit). Returning `nil` means "no local row — caller should
     // insert".
 
-    private enum ConflictDecision {
+    enum ConflictDecision {
         case update
         case skip
     }
@@ -516,7 +516,7 @@ public actor AWSPullCoordinator {
         )
     }
 
-    private static func decide(
+    static func decide(
         db: Database,
         sql: String,
         id: String,
