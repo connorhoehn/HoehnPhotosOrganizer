@@ -259,6 +259,12 @@
        "AuthAutoConfirmUser98088961",
        "Arn"
       ]
+     },
+     "PreTokenGeneration": {
+      "Fn::GetAtt": [
+       "AuthPreTokenGenerationFunctionFDCABDDD",
+       "Arn"
+      ]
      }
     },
     "Policies": {
@@ -289,6 +295,28 @@
    "DeletionPolicy": "Retain",
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/Auth/UserPool/Resource"
+   }
+  },
+  "AuthUserPoolPreTokenGenerationCognito6E456AA2": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AuthPreTokenGenerationFunctionFDCABDDD",
+      "Arn"
+     ]
+    },
+    "Principal": "cognito-idp.amazonaws.com",
+    "SourceArn": {
+     "Fn::GetAtt": [
+      "AuthUserPool8115E87F",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/Auth/UserPool/PreTokenGenerationCognito"
    }
   },
   "AuthUserPoolAppClient1D18298A": {
@@ -331,6 +359,71 @@
    },
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/Auth/UserPool/AppClient/Resource"
+   }
+  },
+  "AuthPreTokenGenerationFunctionServiceRole7DBD718D": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/Auth/PreTokenGenerationFunction/ServiceRole/Resource"
+   }
+  },
+  "AuthPreTokenGenerationFunctionFDCABDDD": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": {
+      "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
+     },
+     "S3Key": "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4.zip"
+    },
+    "Description": "Cognito pre-token-generation trigger. Injects custom:role and permVersion claims into issued tokens so API handlers can authorize without a secondary lookup.",
+    "Handler": "pre_token_generation.handler",
+    "MemorySize": 128,
+    "Role": {
+     "Fn::GetAtt": [
+      "AuthPreTokenGenerationFunctionServiceRole7DBD718D",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.12",
+    "Timeout": 5
+   },
+   "DependsOn": [
+    "AuthPreTokenGenerationFunctionServiceRole7DBD718D"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HoehnPhotosSync/Auth/PreTokenGenerationFunction/Resource",
+    "aws:asset:path": "asset.ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
    }
   },
   "CatalogStorageCatalogTableFB61BB55": {
@@ -665,7 +758,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+     "S3Key": "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4.zip"
     },
     "Description": "Generates presigned S3 PUT/GET URLs for proxy images, curve files, and catalog exports. Called by S3PresignedURLProvider.swift. See infra/sync-api.openapi.yaml /sync/proxies and /sync/curves endpoints.",
     "Environment": {
@@ -676,7 +769,10 @@
       "TABLE_NAME": {
        "Ref": "ThreadStorageThreadEntryTable583E8F3A"
       },
-      "PRESIGNED_URL_EXPIRY_SECONDS": "900"
+      "PRESIGNED_URL_EXPIRY_SECONDS": "900",
+      "COGNITO_USER_POOL_ID": {
+       "Ref": "AuthUserPool8115E87F"
+      }
      }
     },
     "Handler": "presigned_url_handler.handler",
@@ -696,7 +792,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/PresignedUrlFunction/Resource",
-    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:path": "asset.ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -800,7 +896,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+     "S3Key": "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4.zip"
     },
     "Description": "Records catalog export metadata (s3Key, checksum, timestamp) in DynamoDB after the Swift client uploads a .sql.gz snapshot via presigned URL. See infra/sync-api.openapi.yaml /sync/catalog endpoint.",
     "Environment": {
@@ -811,7 +907,10 @@
       "TABLE_NAME": {
        "Ref": "ThreadStorageThreadEntryTable583E8F3A"
       },
-      "PRESIGNED_URL_EXPIRY_SECONDS": "900"
+      "PRESIGNED_URL_EXPIRY_SECONDS": "900",
+      "COGNITO_USER_POOL_ID": {
+       "Ref": "AuthUserPool8115E87F"
+      }
      }
     },
     "Handler": "catalog_export_handler.handler",
@@ -831,7 +930,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/CatalogExportFunction/Resource",
-    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:path": "asset.ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -935,13 +1034,16 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+     "S3Key": "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4.zip"
     },
     "Description": "Batch-writes thread entries (notes, AI turns, print attempts) to DynamoDB. Called by ThreadSyncClient.swift. See infra/sync-api.openapi.yaml POST /sync/threads endpoint.",
     "Environment": {
      "Variables": {
       "THREAD_TABLE_NAME": {
        "Ref": "ThreadStorageThreadEntryTable583E8F3A"
+      },
+      "COGNITO_USER_POOL_ID": {
+       "Ref": "AuthUserPool8115E87F"
       }
      }
     },
@@ -962,7 +1064,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/ThreadSyncFunction/Resource",
-    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:path": "asset.ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -1062,13 +1164,16 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+     "S3Key": "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4.zip"
     },
     "Description": "Queries thread entries for a photo in chronological order from DynamoDB. Called by ThreadSyncClient.swift. See infra/sync-api.openapi.yaml GET /sync/threads/{threadRootId} endpoint.",
     "Environment": {
      "Variables": {
       "THREAD_TABLE_NAME": {
        "Ref": "ThreadStorageThreadEntryTable583E8F3A"
+      },
+      "COGNITO_USER_POOL_ID": {
+       "Ref": "AuthUserPool8115E87F"
       }
      }
     },
@@ -1089,7 +1194,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/ThreadQueryFunction/Resource",
-    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:path": "asset.ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -1219,7 +1324,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+     "S3Key": "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4.zip"
     },
     "Description": "Checks per-photo sync status: proxy existence in S3, thread count in DynamoDB. See infra/sync-api.openapi.yaml GET /sync/status/{canonicalId} endpoint.",
     "Environment": {
@@ -1230,7 +1335,10 @@
       "TABLE_NAME": {
        "Ref": "ThreadStorageThreadEntryTable583E8F3A"
       },
-      "PRESIGNED_URL_EXPIRY_SECONDS": "900"
+      "PRESIGNED_URL_EXPIRY_SECONDS": "900",
+      "COGNITO_USER_POOL_ID": {
+       "Ref": "AuthUserPool8115E87F"
+      }
      }
     },
     "Handler": "sync_status_handler.handler",
@@ -1250,7 +1358,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/SyncStatusFunction/Resource",
-    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:path": "asset.ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -1380,7 +1488,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+     "S3Key": "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4.zip"
     },
     "Description": "Lists all synced assets in S3 (proxies/, curves/) and catalog exports in DynamoDB. Returns a paginated RestoreManifest. See infra/sync-api.openapi.yaml GET /restore/manifest endpoint.",
     "Environment": {
@@ -1391,7 +1499,10 @@
       "TABLE_NAME": {
        "Ref": "ThreadStorageThreadEntryTable583E8F3A"
       },
-      "PRESIGNED_URL_EXPIRY_SECONDS": "900"
+      "PRESIGNED_URL_EXPIRY_SECONDS": "900",
+      "COGNITO_USER_POOL_ID": {
+       "Ref": "AuthUserPool8115E87F"
+      }
      }
     },
     "Handler": "restore_manifest_handler.handler",
@@ -1411,7 +1522,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/RestoreManifestFunction/Resource",
-    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:path": "asset.ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -1515,13 +1626,16 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+     "S3Key": "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4.zip"
     },
     "Description": "Batch-upserts catalog entities (photos, jobs, people, faces, revisions) to DynamoDB. Called by CatalogSyncClient.swift.",
     "Environment": {
      "Variables": {
       "CATALOG_TABLE_NAME": {
        "Ref": "CatalogStorageCatalogTableFB61BB55"
+      },
+      "COGNITO_USER_POOL_ID": {
+       "Ref": "AuthUserPool8115E87F"
       }
      }
     },
@@ -1542,7 +1656,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/CatalogSyncFunction/Resource",
-    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:path": "asset.ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -1642,13 +1756,16 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+     "S3Key": "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4.zip"
     },
     "Description": "Queries catalog entities updated since a given timestamp for incremental sync. Called by CatalogSyncClient.swift.",
     "Environment": {
      "Variables": {
       "CATALOG_TABLE_NAME": {
        "Ref": "CatalogStorageCatalogTableFB61BB55"
+      },
+      "COGNITO_USER_POOL_ID": {
+       "Ref": "AuthUserPool8115E87F"
       }
      }
     },
@@ -1669,7 +1786,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/CatalogQueryFunction/Resource",
-    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:path": "asset.ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -1773,13 +1890,16 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+     "S3Key": "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4.zip"
     },
     "Description": "Soft-deletes catalog entities by setting deletedAt attribute. Called by CatalogSyncClient.swift.",
     "Environment": {
      "Variables": {
       "CATALOG_TABLE_NAME": {
        "Ref": "CatalogStorageCatalogTableFB61BB55"
+      },
+      "COGNITO_USER_POOL_ID": {
+       "Ref": "AuthUserPool8115E87F"
       }
      }
     },
@@ -1800,7 +1920,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/CatalogDeleteFunction/Resource",
-    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:path": "asset.ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -1973,7 +2093,7 @@
      "S3Bucket": {
       "Fn::Sub": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}"
      },
-     "S3Key": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip"
+     "S3Key": "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4.zip"
     },
     "Description": "Handles shared photo album CRUD, photo management, and public share link resolution. GET /a/{token} is public; all other routes require Cognito auth.",
     "Environment": {
@@ -1987,7 +2107,10 @@
       "BUCKET_NAME": {
        "Ref": "PhotoStoragePhotoSyncBucket8F1C123C"
       },
-      "PRESIGNED_URL_EXPIRY_SECONDS": "900"
+      "PRESIGNED_URL_EXPIRY_SECONDS": "900",
+      "COGNITO_USER_POOL_ID": {
+       "Ref": "AuthUserPool8115E87F"
+      }
      }
     },
     "Handler": "album_handler.handler",
@@ -2007,7 +2130,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/AlbumFunction/Resource",
-    "aws:asset:path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+    "aws:asset:path": "asset.ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4",
     "aws:asset:is-bundled": false,
     "aws:asset:property": "Code"
    }
@@ -4747,7 +4870,7 @@
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
-    "Analytics": "v2:deflate64:H4sIAAAAAAAA/1WQwW6DMAyGn2X3NCvtE1Cm3aYhup2rEFLqNcQIO6pYxLtPIbR0J3+/7dh/vJPZbiu3L+pGG91cNxZqGY6s9FWoG50C7WU4eH01LIqzWyiFEi3ocU0vOomDIjOJZnSqw6aW4UvV1sTeGSZhVVc3SoZ37zQDulh65tIMHRABukmA6mSoML2f47o60SQ0tg4YZfgmM5SINhYffIfCgnH8XEqZSdD+pIgMk8xjEKqHVrG5qVGGyhDnPczbV8y1Ru9YvJne4tgtc5/UkVU7W05QGUI/aBMv8xDLzMQfhi/YxNSd0qfuXin3fMEBfs0wG3ioaVoHzvbjRnBt7Pr03Hv+t6c4uwJdAzxftxz5gu51L7OdzLKXHwLYDN4xdEZWKf4BmMfx+SUCAAA="
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/1WQy07DMBBFv6V715RWQmKZFrFDRAXWleMM6VDHjjK2qhD53/Ejacpqzp2x7zy2/HG74ZuVuNJa1pe1woqPH1bICwup00g7Pu6dvIBlh289UQ6lUSiHJT3pLPaCwLN60KI1dbD8FJWC+DaBZ0q0VS34+Oq0tGh0LN1zCX2LREF5hqLl49Hk/ykurTN5Jk2j0Ro+fhH0pTEqFm88w0EhaHtfyhnPaHcSRGCJFzEw0WEjLFzFEFoD2aLD1H3BQkrjgtkLdMoM7eR7p8IVmzRyhvDVuF5CvMxNTJ6Z38CeTR1TM+Wl5lmpcCHd4y/0aYCb8n4xTOPHjqib+Ord2c7Zf30CH4yu0abrlkOw0Q87/syfVj+EuO7DWtgCP+b4B78CjXcjAgAA"
    },
    "Metadata": {
     "aws:cdk:path": "HoehnPhotosSync/CDKMetadata/Default"
@@ -4873,6 +4996,27 @@
    },
    "Export": {
     "Name": "HoehnPhotos-UserPoolClientId"
+   }
+  },
+  "PreTokenGenerationFunctionName": {
+   "Description": "Cognito pre-token-generation Lambda function name. Injects custom:role and permVersion claims at token issuance.",
+   "Value": {
+    "Ref": "AuthPreTokenGenerationFunctionFDCABDDD"
+   },
+   "Export": {
+    "Name": "HoehnPhotos-PreTokenGenerationFunctionName"
+   }
+  },
+  "PreTokenGenerationFunctionArn": {
+   "Description": "ARN of the Cognito pre-token-generation Lambda trigger.",
+   "Value": {
+    "Fn::GetAtt": [
+     "AuthPreTokenGenerationFunctionFDCABDDD",
+     "Arn"
+    ]
+   },
+   "Export": {
+    "Name": "HoehnPhotos-PreTokenGenerationFunctionArn"
    }
   }
  },

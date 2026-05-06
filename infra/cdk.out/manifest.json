@@ -18,7 +18,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-${AWS::Region}",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-${AWS::Region}",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/ef074daa5d2f54fbe47b5b0edd3cc88674752f89294eab89e8792b98bd427ea2.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}/87794d83b8ae85d48b9edcc26d69d0cbc1ea25980cbcb98ee3733b657aede417.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -76,10 +76,28 @@
             "data": "AuthUserPool8115E87F"
           }
         ],
+        "/HoehnPhotosSync/Auth/UserPool/PreTokenGenerationCognito": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthUserPoolPreTokenGenerationCognito6E456AA2"
+          }
+        ],
         "/HoehnPhotosSync/Auth/UserPool/AppClient/Resource": [
           {
             "type": "aws:cdk:logicalId",
             "data": "AuthUserPoolAppClient1D18298A"
+          }
+        ],
+        "/HoehnPhotosSync/Auth/PreTokenGenerationFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthPreTokenGenerationFunctionServiceRole7DBD718D"
+          }
+        ],
+        "/HoehnPhotosSync/Auth/PreTokenGenerationFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AuthPreTokenGenerationFunctionFDCABDDD"
           }
         ],
         "/HoehnPhotosSync/CatalogStorage/CatalogTable/Resource": [
@@ -806,6 +824,18 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "UserPoolClientId"
+          }
+        ],
+        "/HoehnPhotosSync/PreTokenGenerationFunctionName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PreTokenGenerationFunctionName"
+          }
+        ],
+        "/HoehnPhotosSync/PreTokenGenerationFunctionArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PreTokenGenerationFunctionArn"
           }
         ],
         "/HoehnPhotosSync/CDKMetadata/Default": [

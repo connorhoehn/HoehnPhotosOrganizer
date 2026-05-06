@@ -1,20 +1,20 @@
 {
   "version": "36.0.0",
   "files": {
-    "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7": {
+    "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4": {
       "source": {
-        "path": "asset.3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7",
+        "path": "asset.ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4",
         "packaging": "zip"
       },
       "destinations": {
         "current_account-current_region": {
           "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
-          "objectKey": "3060f2a9e2b56c20ad606b3d3b3af35997db4773803a9a017542379b1cf493f7.zip",
+          "objectKey": "ed7db3fe72c13e3dc5360447e8243e16fbe740566909caef5d626ba4318134e4.zip",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
         }
       }
     },
-    "ef074daa5d2f54fbe47b5b0edd3cc88674752f89294eab89e8792b98bd427ea2": {
+    "87794d83b8ae85d48b9edcc26d69d0cbc1ea25980cbcb98ee3733b657aede417": {
       "source": {
         "path": "HoehnPhotosSync.template.json",
         "packaging": "file"
@@ -22,7 +22,7 @@
       "destinations": {
         "current_account-current_region": {
           "bucketName": "cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}",
-          "objectKey": "ef074daa5d2f54fbe47b5b0edd3cc88674752f89294eab89e8792b98bd427ea2.json",
+          "objectKey": "87794d83b8ae85d48b9edcc26d69d0cbc1ea25980cbcb98ee3733b657aede417.json",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
         }
       }

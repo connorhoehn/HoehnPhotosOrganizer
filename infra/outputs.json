@@ -1,0 +1,15 @@
+{
+  "HoehnPhotosSync": {
+    "ThreadEntryTableName": "HoehnPhotosSync-ThreadStorageThreadEntryTable583E8F3A-LQKXJKL1C1CE",
+    "UserPoolClientId": "7799f441k86ko5s0pg1475hqs8",
+    "AlbumsTableName": "HoehnPhotosSync-AlbumStorageAlbumsTable6077DEC6-1GT2QM5BYHOS8",
+    "ShareLinksTableName": "HoehnPhotosSync-AlbumStorageShareLinksTableA670D7AD-1OB7OWEVOHWGZ",
+    "UserPoolId": "us-east-1_fWvqkiQL5",
+    "PhotoSyncBucketName": "hoehnphotossync-photostoragephotosyncbucket8f1c123-e91llzddurak",
+    "CatalogTableName": "HoehnPhotosSync-CatalogStorageCatalogTableFB61BB55-1KTYSAHMSLDD8",
+    "PreTokenGenerationFunctionName": "HoehnPhotosSync-AuthPreTokenGenerationFunctionFDCA-MXOMkHJK5VNy",
+    "SyncApiEndpoint": "https://wkoyma21q0.execute-api.us-east-1.amazonaws.com/v1/",
+    "SyncApiEndpointE48AE9EB": "https://wkoyma21q0.execute-api.us-east-1.amazonaws.com/v1/",
+    "PreTokenGenerationFunctionArn": "arn:aws:lambda:us-east-1:264161986065:function:HoehnPhotosSync-AuthPreTokenGenerationFunctionFDCA-MXOMkHJK5VNy"
+  }
+}
