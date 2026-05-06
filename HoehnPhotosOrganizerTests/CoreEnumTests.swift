@@ -100,4 +100,57 @@ struct CoreEnumTests {
         #expect(SmartCollectionRule.Operator.isNull.rawValue      == "is_null")
         #expect(SmartCollectionRule.Operator.isNotNull.rawValue   == "is_not_null")
     }
+
+    // MARK: - PrintType
+
+    @Test
+    func testPrintTypeRawValuesMatchDatabaseColumnValues() {
+        #expect(PrintType.inkjetColor.rawValue             == "inkjet_color")
+        #expect(PrintType.inkjetBW.rawValue                == "inkjet_bw")
+        #expect(PrintType.silverGelatinDarkroom.rawValue   == "silver_gelatin_darkroom")
+        #expect(PrintType.platinumPalladium.rawValue       == "platinum_palladium")
+        #expect(PrintType.cyanotype.rawValue               == "cyanotype")
+        #expect(PrintType.digitalNegative.rawValue         == "digital_negative")
+    }
+
+    @Test
+    func testPrintTypeAllCasesHaveNonEmptyDisplayNames() {
+        for type_ in PrintType.allCases {
+            #expect(!type_.displayName.isEmpty,
+                    "PrintType.\(type_.rawValue).displayName must not be empty")
+        }
+    }
+
+    // MARK: - PrintOutcome
+
+    @Test
+    func testPrintOutcomeRawValuesMatchDatabaseColumnValues() {
+        #expect(PrintOutcome.pass.rawValue             == "pass")
+        #expect(PrintOutcome.fail.rawValue             == "fail")
+        #expect(PrintOutcome.needsAdjustment.rawValue  == "needs_adjustment")
+        #expect(PrintOutcome.testing.rawValue          == "testing")
+    }
+
+    // MARK: - OutboxStatus
+
+    @Test
+    func testOutboxStatusRawValuesMatchDatabaseColumnValues() {
+        #expect(OutboxStatus.pending.rawValue    == "pending")
+        #expect(OutboxStatus.processing.rawValue == "processing")
+        #expect(OutboxStatus.done.rawValue       == "done")
+        #expect(OutboxStatus.failed.rawValue     == "failed")
+    }
+
+    // MARK: - TriageJob enums
+
+    @Test
+    func testTriageJobStatusAndSourceRawValuesMatchDatabaseColumnValues() {
+        #expect(TriageJobStatus.open.rawValue      == "open")
+        #expect(TriageJobStatus.complete.rawValue  == "complete")
+        #expect(TriageJobStatus.archived.rawValue  == "archived")
+
+        #expect(TriageJobSource.importBatch.rawValue == "import_batch")
+        #expect(TriageJobSource.manual.rawValue      == "manual")
+        #expect(TriageJobSource.split.rawValue       == "split")
+    }
 }
