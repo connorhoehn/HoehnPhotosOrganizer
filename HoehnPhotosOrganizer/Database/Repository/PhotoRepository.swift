@@ -200,6 +200,26 @@ actor PhotoRepository {
         }
     }
 
+    /// Count assets with a given processing state without loading rows into RAM.
+    func fetchCountByProcessingState(_ state: ProcessingState) async throws -> Int {
+        try await db.dbPool.read { db in
+            try Int.fetchOne(db,
+                sql: "SELECT COUNT(*) FROM photo_assets WHERE processing_state = ?",
+                arguments: [state.rawValue]
+            ) ?? 0
+        }
+    }
+
+    /// Fetch up to `limit` assets with a given processing state (for paginated processing).
+    func fetchByProcessingState(_ state: ProcessingState, limit: Int) async throws -> [PhotoAsset] {
+        try await db.dbPool.read { db in
+            try PhotoAsset
+                .filter(Column("processing_state") == state.rawValue)
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
     /// Returns canonical names of all assets already past the initial `.indexed` state.
     ///
     /// Used by IngestionActor's resume skip check (ING-4): pre-fetched once before the

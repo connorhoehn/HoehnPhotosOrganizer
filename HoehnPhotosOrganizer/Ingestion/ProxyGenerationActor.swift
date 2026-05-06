@@ -52,19 +52,29 @@ actor ProxyGenerationActor {
 
     // MARK: - Private processing loop
 
+    // Batch size for paginated proxyPending fetches. Caps peak RAM at ~1000 PhotoAsset rows
+    // instead of loading the entire pending queue (~100 MB at 100k scale).
+    private static let pageBatchSize = 1_000
+
     private func run(
         driveMount: URL,
         driveUUID: String? = nil,
         continuation: AsyncStream<ProxyGenerationProgress>.Continuation
     ) async {
-        let pending = (try? await photoRepo.fetchByProcessingState(.proxyPending)) ?? []
-        let total = pending.count
+        let total = (try? await photoRepo.fetchCountByProcessingState(.proxyPending)) ?? 0
         var completed = 0
         var failed = 0
+        var processedIds: Set<String> = []
 
         let proxiesDir = Self.proxiesDirectory()
 
-        for asset in pending {
+        while true {
+            let batch = (try? await photoRepo.fetchByProcessingState(.proxyPending, limit: Self.pageBatchSize)) ?? []
+            let unprocessed = batch.filter { !processedIds.contains($0.id) }
+            if unprocessed.isEmpty { break }
+
+        for asset in unprocessed {
+            processedIds.insert(asset.id)
             // Absolute paths (local imports, film frame exports) are used as-is;
             // relative paths are resolved against the drive mount.
             let sourceURL: URL
@@ -157,6 +167,7 @@ actor ProxyGenerationActor {
 
             continuation.yield(ProxyGenerationProgress(total: total, completed: completed, failed: failed))
         }
+        } // end while true
     }
 
     // MARK: - Thumbnail generation (PRX-10)

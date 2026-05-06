@@ -204,6 +204,36 @@ struct ProxyGenerationTests {
         // Integration test: covered by manual verification with real proxied images
     }
 
+    // MARK: - Paginated fetch (import-audit 03, Rank 5)
+
+    @Test("Paginated processQueue handles all assets without loading all into RAM at once")
+    func testPaginatedProcessingHandlesAllAssets() async throws {
+        // Verifies the while-true + processedIds pagination loop in ProxyGenerationActor.run():
+        // - All 3 assets are attempted (total == 3)
+        // - The loop terminates even though failures keep assets in proxyPending state
+        // - completed + failed == total (no assets silently skipped)
+        let db = try AppDatabase.makeInMemory()
+        let photoRepo = PhotoRepository(db: db)
+        let proxyRepo = ProxyAssetRepository(db: db)
+        let actor = ProxyGenerationActor(photoRepo: photoRepo, proxyRepo: proxyRepo)
+
+        for i in 1...3 {
+            var asset = PhotoAsset.new(canonicalName: "batch_test_\(i).jpg", role: .original,
+                                       filePath: "/nonexistent/batch_test_\(i).jpg", fileSize: 0)
+            asset.processingState = ProcessingState.proxyPending.rawValue
+            try await photoRepo.upsert(asset)
+        }
+
+        var finalProgress: ProxyGenerationProgress?
+        for await p in actor.processQueue(driveMount: URL(fileURLWithPath: "/")) {
+            finalProgress = p
+        }
+
+        let p = try #require(finalProgress, "processQueue must yield at least one progress update")
+        #expect(p.total == 3, "total must equal assets inserted")
+        #expect(p.completed + p.failed == 3, "all 3 assets must be attempted (none silently skipped)")
+    }
+
     // MARK: - Helpers
 
     private func fixturesURL() -> URL {
