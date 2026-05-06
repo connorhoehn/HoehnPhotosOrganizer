@@ -11,7 +11,6 @@ import Foundation
 /// Params:
 ///   - "confidence": Float string, detection threshold (default "0.25")
 ///   - "dilation": Int string, mask dilation radius in pixels (default "8")
-///   - "strategy": "lama", "mat", or "auto" (default "auto")
 struct DustRemovalStep: PipelineStepProtocol {
     let stepType: PipelineStepType = .dustRemoval
 
@@ -25,8 +24,6 @@ struct DustRemovalStep: PipelineStepProtocol {
         // Parse params
         let confidence = Float(params["confidence"] ?? "") ?? 0.25
         let dilation = Int(params["dilation"] ?? "") ?? 8
-        let strategyStr = params["strategy"] ?? "auto"
-        let strategy = InpaintingStrategy(rawValue: strategyStr) ?? .auto
 
         // Render CIImage to CGImage for the detection + inpainting pipeline
         guard let cgImage = context.createCGImage(input, from: input.extent) else {
@@ -52,7 +49,7 @@ struct DustRemovalStep: PipelineStepProtocol {
                     dilationRadius: dilation
                 )
 
-                guard let (detections, mask) = detectionResult else {
+                guard let (_, mask) = detectionResult else {
                     // No artifacts — return original
                     resultImage = cgImage
                     semaphore.signal()
@@ -61,9 +58,7 @@ struct DustRemovalStep: PipelineStepProtocol {
 
                 let inpaintResult = try await inpainter.inpaint(
                     image: cgImage,
-                    mask: mask,
-                    strategy: strategy,
-                    detections: detections
+                    mask: mask
                 )
 
                 resultImage = inpaintResult.image

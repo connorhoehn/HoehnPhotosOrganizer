@@ -47,27 +47,6 @@ struct ActivityFeedView: View {
         NavigationStack(path: $navigationPath) {
             timelineContent
                 .navigationTitle("Activity")
-                .toolbar {
-                    ToolbarItem(placement: .automatic) {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                showOnlyFailed.toggle()
-                            }
-                        } label: {
-                            Label("Failures", systemImage: showOnlyFailed ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
-                                .foregroundStyle(showOnlyFailed ? .red : .secondary)
-                        }
-                        .help(showOnlyFailed ? "Showing failed events only — click to clear" : "Show failed events only")
-                    }
-                    ToolbarItem(placement: .automatic) {
-                        Button {
-                            showNoteSheet = true
-                        } label: {
-                            Label("Add Note", systemImage: "square.and.pencil")
-                        }
-                        .keyboardShortcut("n", modifiers: [.command, .shift])
-                    }
-                }
                 .navigationDestination(for: ActivityEvent.self) { event in
                     VStack(spacing: 0) {
                         breadcrumb(for: event)

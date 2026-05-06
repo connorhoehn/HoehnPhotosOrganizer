@@ -65,7 +65,7 @@ extension CloudSyncEngine {
     private func fetchRemoteChanges() async throws -> ([CKRecord], [(CKRecord.ID, CKRecord.RecordType)], CKServerChangeToken?) {
         let currentToken = savedChangeToken
         let currentZoneID = zoneID
-        let currentDatabase = database
+        guard let currentDatabase = database else { return ([], [], nil) }
 
         do {
             return try await withCheckedThrowingContinuation { continuation in
@@ -399,7 +399,7 @@ extension CloudSyncEngine {
     /// Subscribe to remote changes via silent push notification.
     /// Only creates the subscription once — checks for existing first.
     func subscribeToChanges() async throws {
-        guard Self.isEnabled else {
+        guard Self.isEnabled, let database else {
             logger.info("subscribeToChanges skipped — CloudKit sync disabled")
             return
         }

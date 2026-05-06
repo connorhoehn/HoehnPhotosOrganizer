@@ -220,6 +220,7 @@ extension CloudSyncEngine {
     private func pushBatch(_ records: [CKRecord]) async throws {
         // Capture db reference outside the Sendable closure
         let db = appDatabase
+        guard let database else { return }
         let succeededIDs: [CKRecord.ID] = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[CKRecord.ID], Error>) in
             // Use Sendable-safe local collections via a wrapper
             let state = PushBatchState()
@@ -300,6 +301,7 @@ extension CloudSyncEngine {
     /// Fetch server version of conflicted records, merge, and retry push.
     func resolveConflicts(recordIDs: [CKRecord.ID]) async throws {
         guard !recordIDs.isEmpty else { return }
+        guard let database else { return }
 
         // Fetch current server records
         var serverRecords: [CKRecord.ID: CKRecord] = [:]

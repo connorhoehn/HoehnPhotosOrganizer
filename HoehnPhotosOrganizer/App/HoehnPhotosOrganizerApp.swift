@@ -174,11 +174,19 @@ struct HoehnPhotosOrganizerApp: App {
                         // flips to false the `if/else` re-evaluates, SwiftUI
                         // destroys this branch, and this `.task` is cancelled —
                         // we stop the coordinators in the teardown block below.
-                        await cloudPushCoordinator.start()
-                        await cloudPullCoordinator.start()
-                        // CloudKit gated elsewhere on CloudSyncEngine.isEnabled;
-                        // the legacy `cloudSyncCoordinator` path is started from
-                        // init() above when the iCloud entitlement is present.
+                        //
+                        // AWS push/pull is gated on UserDefaults("AWSSyncEnabled").
+                        // Default off — when GRDB is statically linked into both
+                        // the app and HoehnPhotosCore, the drain loop trips
+                        // GRDB's SchedulingWatchdog and fatals. Flip the key once
+                        // GRDB linkage is deduplicated (Xcode → app target →
+                        // General → Frameworks: set GRDB/GRDBQuery to "Embed &
+                        // Sign" so a single dynamic copy is shared).
+                        let awsSyncEnabled = UserDefaults.standard.bool(forKey: "AWSSyncEnabled")
+                        if awsSyncEnabled {
+                            await cloudPushCoordinator.start()
+                            await cloudPullCoordinator.start()
+                        }
 
                         // Park until SwiftUI cancels this `.task` (sign-out).
                         do {
@@ -189,8 +197,10 @@ struct HoehnPhotosOrganizerApp: App {
                             // Cancellation — fall through to stop().
                         }
 
-                        await cloudPushCoordinator.stop()
-                        await cloudPullCoordinator.stop()
+                        if awsSyncEnabled {
+                            await cloudPushCoordinator.stop()
+                            await cloudPullCoordinator.stop()
+                        }
                     }
             } else {
                 LoginView()

@@ -22,7 +22,7 @@ struct DustRemovalProgress: Sendable {
     enum Phase: String, Sendable {
         case rendering   // DNG -> TIFF/JPEG
         case detecting   // YOLOv8 dust/hair detection
-        case inpainting  // LaMa/MAT fill
+        case inpainting  // LaMa fill
         case saving      // writing output
         case done
         case error
@@ -66,13 +66,13 @@ struct DustRemovalImageResult: Sendable {
 
 /// Coordinates the full detect-then-inpaint pipeline across a batch of scanned
 /// film photos. Manages DNG rendering, YOLOv8 detection, mask generation, and
-/// LaMa/MAT inpainting with progress reporting.
+/// LaMa inpainting with progress reporting.
 ///
 /// Processing order per image:
 /// 1. DNG -> render to JPEG/TIFF (via proxy if available, or CIImage decode)
 /// 2. YOLOv8 dust/hair detector
 /// 3. Dilate bboxes -> binary mask
-/// 4. LaMa / MAT inpainting
+/// 4. LaMa inpainting
 /// 5. Save result + record lineage
 ///
 /// Target: fully local batch processing on Apple Silicon.
@@ -102,8 +102,8 @@ actor BatchDustRemovalPipeline {
         if !DustDetectionService.isAvailable {
             missing.append("FilmDustDetector model")
         }
-        if !InpaintingService.lamaIsAvailable && !InpaintingService.matIsAvailable {
-            missing.append("LaMa or MAT inpainting model")
+        if !InpaintingService.lamaIsAvailable {
+            missing.append("LaMa inpainting model")
         }
         if missing.isEmpty { return "All models available" }
         return "Missing: " + missing.joined(separator: ", ")
@@ -225,9 +225,7 @@ actor BatchDustRemovalPipeline {
                 continuation.yield(progress(.inpainting))
                 let inpaintResult = try await inpainter.inpaint(
                     image: cgImage,
-                    mask: mask,
-                    strategy: config.inpaintingStrategy,
-                    detections: detections
+                    mask: mask
                 )
 
                 // Step 4: Save output

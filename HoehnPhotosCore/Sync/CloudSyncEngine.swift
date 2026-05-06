@@ -52,8 +52,12 @@ public final class CloudSyncEngine: ObservableObject {
 
     // MARK: - CloudKit handles
 
-    public let container: CKContainer
-    public let database: CKDatabase
+    /// `nil` when the app is built/running without the
+    /// `com.apple.developer.icloud-services` entitlement (e.g. personal-team
+    /// development). All CloudKit methods on this engine are gated on
+    /// `Self.isEnabled`, so these stay untouched when sync is disabled.
+    public let container: CKContainer?
+    public let database: CKDatabase?
     public let zoneID: CKRecordZone.ID
 
     // MARK: - Local database
@@ -75,8 +79,19 @@ public final class CloudSyncEngine: ObservableObject {
     // MARK: - Init
 
     public init(appDatabase: AppDatabase) {
-        self.container = CKContainer(identifier: CloudSyncEngine.containerIdentifier)
-        self.database = container.privateCloudDatabase
+        // Only construct the CKContainer when the iCloud entitlement is
+        // present — `CKContainer.init(identifier:)` aborts the process with a
+        // "Significant issue" if the bundle is missing the
+        // `com.apple.developer.icloud-services` entitlement, which is the
+        // case on personal Apple Developer teams.
+        if Self.isEnabled {
+            let c = CKContainer(identifier: CloudSyncEngine.containerIdentifier)
+            self.container = c
+            self.database = c.privateCloudDatabase
+        } else {
+            self.container = nil
+            self.database = nil
+        }
         self.zoneID = CKRecordZone.ID(zoneName: "HoehnPhotosZone", ownerName: CKCurrentUserDefaultName)
         self.appDatabase = appDatabase
     }
@@ -85,7 +100,7 @@ public final class CloudSyncEngine: ObservableObject {
 
     /// Creates the custom record zone if it does not already exist.
     public func ensureZoneExists() async throws {
-        guard Self.isEnabled else {
+        guard Self.isEnabled, let database else {
             print("[CloudSync] ensureZoneExists skipped — CloudKit sync disabled")
             return
         }

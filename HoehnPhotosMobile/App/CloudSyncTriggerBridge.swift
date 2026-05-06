@@ -9,6 +9,7 @@
 
 import Foundation
 import HoehnPhotosCore
+import HoehnPhotosCore
 
 /// Bridges in-app edit events to CloudKit sync triggers with debounce.
 /// Parallels `MacCloudSyncCoordinator` but runs in the iOS target.

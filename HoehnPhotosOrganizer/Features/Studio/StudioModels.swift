@@ -1,6 +1,7 @@
 import SwiftUI
 import Foundation
 import Combine
+import HoehnPhotosCore
 import UniformTypeIdentifiers
 
 // MARK: - StudioPage

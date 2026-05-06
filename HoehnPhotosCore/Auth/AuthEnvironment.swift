@@ -273,38 +273,35 @@ public final class AuthEnvironment: ObservableObject {
         case exhaustedRetries
     }
 
-    /// Executes the refresh-token grant against the Cognito OAuth endpoint.
+    /// Executes the refresh-token grant against the Cognito IDP endpoint
+    /// directly (`cognito-idp.<region>.amazonaws.com`), bypassing the hosted-UI
+    /// domain so no `oauth2/token` URL is required.
     ///
     /// Runs on a detached, non-isolated context. Retries transient network
     /// failures up to 3 times with exponential backoff (1s / 2s / 4s).
     /// Returns immediately on HTTP 401 (refresh token revoked).
     private static func performRefresh(refreshToken: String) async throws -> RefreshResult {
-        let domain = AuthConfig.cognitoDomain
+        let region = AuthConfig.cognitoRegion
         let clientId = AuthConfig.clientId
 
-        // Accept either a bare domain or a fully-qualified URL in config.
-        let urlString: String
-        if domain.hasPrefix("http://") || domain.hasPrefix("https://") {
-            urlString = "\(domain)/oauth2/token"
-        } else {
-            urlString = "https://\(domain)/oauth2/token"
-        }
-
-        guard let url = URL(string: urlString) else {
+        guard let url = URL(string: "https://cognito-idp.\(region).amazonaws.com/") else {
             throw RefreshError.badURL
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.setValue("application/x-amz-json-1.1", forHTTPHeaderField: "Content-Type")
         request.setValue(
-            "application/x-www-form-urlencoded",
-            forHTTPHeaderField: "Content-Type"
+            "AWSCognitoIdentityProviderService.InitiateAuth",
+            forHTTPHeaderField: "X-Amz-Target"
         )
 
-        let body = "grant_type=refresh_token"
-            + "&client_id=\(clientId)"
-            + "&refresh_token=\(refreshToken)"
-        request.httpBody = body.data(using: .utf8)
+        let payload: [String: Any] = [
+            "AuthFlow": "REFRESH_TOKEN_AUTH",
+            "ClientId": clientId,
+            "AuthParameters": ["REFRESH_TOKEN": refreshToken],
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
 
         let backoffs: [UInt64] = [
             1_000_000_000, // 1s
@@ -321,8 +318,17 @@ public final class AuthEnvironment: ObservableObject {
                     throw RefreshError.invalidResponse
                 }
 
-                if http.statusCode == 401 {
-                    throw RefreshError.unauthorized
+                // Cognito IDP returns 400 with JSON `{"__type": "NotAuthorizedException", ...}`
+                // when the refresh token is revoked or expired — treat the same as OAuth's 401.
+                if http.statusCode == 400 || http.statusCode == 401 {
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let type = json["__type"] as? String,
+                       type.contains("NotAuthorized") || type.contains("UserNotFound") {
+                        throw RefreshError.unauthorized
+                    }
+                    if http.statusCode == 401 {
+                        throw RefreshError.unauthorized
+                    }
                 }
 
                 guard (200..<300).contains(http.statusCode) else {
@@ -331,15 +337,18 @@ public final class AuthEnvironment: ObservableObject {
                     continue
                 }
 
+                // Direct IDP response shape:
+                //   { "AuthenticationResult": { "IdToken": "...", "AccessToken": "...", "ExpiresIn": ... } }
+                // REFRESH_TOKEN_AUTH does not rotate the refresh token, so it's omitted on success.
                 guard
                     let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                    let newId = json["id_token"] as? String
+                    let result = json["AuthenticationResult"] as? [String: Any],
+                    let newId = result["IdToken"] as? String
                 else {
                     throw RefreshError.decoding
                 }
 
-                let newRefresh = json["refresh_token"] as? String
-                return RefreshResult(idToken: newId, refreshToken: newRefresh)
+                return RefreshResult(idToken: newId, refreshToken: nil)
             } catch let error as RefreshError {
                 if case .unauthorized = error { throw error }
                 if case .decoding = error { throw error }

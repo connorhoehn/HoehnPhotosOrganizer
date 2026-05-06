@@ -1,24 +1,27 @@
 // Features/Auth/LoginView.swift
 //
-// Cognito Hosted UI sign-in via OAuth2 + PKCE, ported from VideoNowAndLater.
-// Uses ASWebAuthenticationSession for the authorize step, then a manual
-// POST /oauth2/token exchange. Tokens are handed to AuthEnvironment which
-// owns Keychain persistence + session state.
+// Native Cognito sign-in via direct InitiateAuth (USER_PASSWORD_AUTH) against
+// `cognito-idp.<region>.amazonaws.com`. No browser, no hosted-UI domain
+// required. NEW_PASSWORD_REQUIRED is handled inline as a second stage.
 
 import SwiftUI
-import AuthenticationServices
 import Foundation
 import HoehnPhotosCore
-#if canImport(UIKit)
-import UIKit
-#endif
 
 // MARK: - LoginView
 
 struct LoginView: View {
     @EnvironmentObject var auth: AuthEnvironment
-    @State private var coordinator = LoginCoordinator()
 
+    private enum Stage {
+        case credentials
+        case newPassword(session: String, username: String)
+    }
+
+    @State private var stage: Stage = .credentials
+    @State private var email: String = ""
+    @State private var password: String = ""
+    @State private var newPassword: String = ""
     @State private var isSigningIn = false
     @State private var errorMessage: String?
     @State private var toast: ToastMessage?
@@ -54,10 +57,15 @@ struct LoginView: View {
 
                 Spacer(minLength: 0)
 
-                // Panel: primary button + error + (debug) skip
+                // Panel: form + error + (debug) skip
                 GlassPanel(tone: .overlay) {
                     VStack(spacing: HPSpacing.md) {
-                        primaryButton
+                        switch stage {
+                        case .credentials:
+                            credentialsForm
+                        case .newPassword:
+                            newPasswordForm
+                        }
 
                         if let errorMessage {
                             errorBanner(errorMessage)
@@ -85,20 +93,112 @@ struct LoginView: View {
 
     // MARK: Subviews
 
-    private var primaryButton: some View {
-        Button {
-            HPHaptic.medium()
-            Task { await startSignIn() }
-        } label: {
+    private var credentialsForm: some View {
+        VStack(spacing: HPSpacing.sm) {
+            inputField(
+                placeholder: "Email",
+                text: $email,
+                isSecure: false,
+                contentType: .username,
+                keyboard: .emailAddress
+            )
+
+            inputField(
+                placeholder: "Password",
+                text: $password,
+                isSecure: true,
+                contentType: .password
+            )
+
+            primaryButton(
+                title: isSigningIn ? "Signing in…" : "Sign in",
+                icon: "lock.shield.fill",
+                disabled: isSigningIn || email.isEmpty || password.isEmpty
+            ) {
+                HPHaptic.medium()
+                Task { await submitCredentials() }
+            }
+        }
+    }
+
+    private var newPasswordForm: some View {
+        VStack(spacing: HPSpacing.sm) {
+            Text("Set a new password")
+                .font(HPFont.bodyStrong)
+                .foregroundStyle(.white)
+
+            Text("Cognito requires a permanent password before continuing.")
+                .font(HPFont.cardSubtitle)
+                .foregroundStyle(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+
+            inputField(
+                placeholder: "New password (8+ chars)",
+                text: $newPassword,
+                isSecure: true,
+                contentType: .newPassword
+            )
+
+            primaryButton(
+                title: isSigningIn ? "Updating…" : "Update password",
+                icon: "checkmark.shield.fill",
+                disabled: isSigningIn || newPassword.count < 8
+            ) {
+                HPHaptic.medium()
+                Task { await submitNewPassword() }
+            }
+        }
+    }
+
+    private func inputField(
+        placeholder: String,
+        text: Binding<String>,
+        isSecure: Bool,
+        contentType: UITextContentType,
+        keyboard: UIKeyboardType = .default
+    ) -> some View {
+        Group {
+            if isSecure {
+                SecureField(placeholder, text: text)
+                    .textContentType(contentType)
+            } else {
+                TextField(placeholder, text: text)
+                    .textContentType(contentType)
+                    .keyboardType(keyboard)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, HPSpacing.md)
+        .frame(height: 48)
+        .background(
+            Color.white.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: HPRadius.large, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: HPRadius.large, style: .continuous)
+                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+        )
+        .disabled(isSigningIn)
+    }
+
+    private func primaryButton(
+        title: String,
+        icon: String,
+        disabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
             HStack(spacing: HPSpacing.sm) {
                 if isSigningIn {
                     ProgressView().tint(.white).scaleEffect(0.85)
                 } else {
-                    Image(systemName: "lock.shield.fill")
+                    Image(systemName: icon)
                         .font(.system(size: 16, weight: .semibold))
                         .accessibilityHidden(true)
                 }
-                Text(isSigningIn ? "Signing in…" : "Sign in")
+                Text(title)
                     .font(.system(size: 17, weight: .semibold))
             }
             .foregroundStyle(.white)
@@ -113,13 +213,12 @@ struct LoginView: View {
                 in: RoundedRectangle(cornerRadius: HPRadius.card, style: .continuous)
             )
             .shadow(color: .purple.opacity(0.35), radius: 14, y: 6)
+            .opacity(disabled ? 0.55 : 1.0)
         }
         .buttonStyle(.plain)
-        .disabled(isSigningIn)
+        .disabled(disabled)
         .scaleEffect(isSigningIn ? 0.98 : 1.0)
         .animation(HPAnimation.cardSpring, value: isSigningIn)
-        .accessibilityLabel(isSigningIn ? "Signing in" : "Sign in")
-        .accessibilityHint("Starts the sign-in flow")
     }
 
     private func errorBanner(_ msg: String) -> some View {
@@ -182,224 +281,64 @@ struct LoginView: View {
     // MARK: - Sign-in flow
 
     @MainActor
-    private func startSignIn() async {
+    private func submitCredentials() async {
         guard !isSigningIn else { return }
         errorMessage = nil
         isSigningIn = true
         defer { isSigningIn = false }
 
-        let pkce = makePKCE()
-
-        let scopeString = AuthConfig.scopes.joined(separator: "+")
-        let urlString =
-            "\(AuthConfig.cognitoDomain)/oauth2/authorize" +
-            "?response_type=code" +
-            "&client_id=\(AuthConfig.clientId)" +
-            "&redirect_uri=\(AuthConfig.callbackURL)" +
-            "&scope=\(scopeString)" +
-            "&code_challenge=\(pkce.challenge)" +
-            "&code_challenge_method=S256"
-
-        guard let authorizeURL = URL(string: urlString) else {
-            errorMessage = "Invalid auth configuration"
-            return
-        }
-
-        let code: String
         do {
-            code = try await coordinator.authorize(
-                url: authorizeURL,
-                callbackScheme: AuthConfig.callbackScheme
+            let result = try await CognitoAuthClient.initiateUserPasswordAuth(
+                username: email,
+                password: password
             )
-        } catch LoginError.userCancelled {
-            // User dismissed the sheet — stay silent.
-            return
-        } catch {
-            let ns = error as NSError
-            errorMessage = ns.localizedDescription
-            toast = ToastMessage(.error, "Sign-in failed", subtitle: ns.localizedDescription)
-            return
-        }
-
-        do {
-            try await exchangeCodeForTokens(code: code, verifier: pkce.verifier)
-        } catch let err as LoginError {
+            switch result {
+            case .tokens(let idToken, let refreshToken):
+                let username = decodeJWTUsername(idToken) ?? email
+                await auth.setSession(
+                    idToken: idToken,
+                    refreshToken: refreshToken,
+                    username: username
+                )
+            case .newPasswordRequired(let session):
+                stage = .newPassword(session: session, username: email)
+            }
+        } catch let err as CognitoAuthClient.AuthError {
             errorMessage = err.userMessage
             toast = ToastMessage(.error, "Sign-in failed", subtitle: err.userMessage)
         } catch {
-            let ns = error as NSError
-            errorMessage = ns.localizedDescription
-            toast = ToastMessage(.error, "Sign-in failed", subtitle: ns.localizedDescription)
+            let msg = (error as NSError).localizedDescription
+            errorMessage = msg
+            toast = ToastMessage(.error, "Sign-in failed", subtitle: msg)
         }
     }
 
     @MainActor
-    private func exchangeCodeForTokens(code: String, verifier: String) async throws {
-        guard let tokenURL = URL(string: "\(AuthConfig.cognitoDomain)/oauth2/token") else {
-            throw LoginError.invalidConfig
-        }
+    private func submitNewPassword() async {
+        guard case let .newPassword(session, username) = stage, !isSigningIn else { return }
+        errorMessage = nil
+        isSigningIn = true
+        defer { isSigningIn = false }
 
-        var request = URLRequest(url: tokenURL)
-        request.httpMethod = "POST"
-        request.setValue(
-            "application/x-www-form-urlencoded",
-            forHTTPHeaderField: "Content-Type"
-        )
-
-        let bodyPairs: [(String, String)] = [
-            ("grant_type", "authorization_code"),
-            ("client_id", AuthConfig.clientId),
-            ("code", code),
-            ("redirect_uri", AuthConfig.callbackURL),
-            ("code_verifier", verifier)
-        ]
-        request.httpBody = encodeFormBody(bodyPairs).data(using: .utf8)
-
-        let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            let (idToken, refreshToken) = try await CognitoAuthClient.respondToNewPasswordChallenge(
+                username: username,
+                newPassword: newPassword,
+                session: session
+            )
+            let resolved = decodeJWTUsername(idToken) ?? username
+            await auth.setSession(
+                idToken: idToken,
+                refreshToken: refreshToken,
+                username: resolved
+            )
+        } catch let err as CognitoAuthClient.AuthError {
+            errorMessage = err.userMessage
+            toast = ToastMessage(.error, "Update failed", subtitle: err.userMessage)
         } catch {
-            throw LoginError.network(underlying: error)
-        }
-
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            let serverMsg = String(data: data, encoding: .utf8) ?? "HTTP \(http.statusCode)"
-            throw LoginError.tokenExchangeFailed(status: http.statusCode, body: serverMsg)
-        }
-
-        guard
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else {
-            throw LoginError.malformedResponse
-        }
-
-        guard let idToken = json["id_token"] as? String else {
-            throw LoginError.missingField("id_token")
-        }
-        guard let refreshToken = json["refresh_token"] as? String else {
-            throw LoginError.missingField("refresh_token")
-        }
-
-        let username = decodeJWTUsername(idToken) ?? "User"
-
-        await auth.setSession(
-            idToken: idToken,
-            refreshToken: refreshToken,
-            username: username
-        )
-    }
-}
-
-// MARK: - Errors
-
-private enum LoginError: Error {
-    case userCancelled
-    case invalidConfig
-    case noAuthorizationCode
-    case network(underlying: Error)
-    case tokenExchangeFailed(status: Int, body: String)
-    case malformedResponse
-    case missingField(String)
-
-    var userMessage: String {
-        switch self {
-        case .userCancelled: return "Sign-in cancelled."
-        case .invalidConfig: return "Invalid authentication configuration."
-        case .noAuthorizationCode: return "No authorization code received."
-        case .network(let err): return "Network error: \(err.localizedDescription)"
-        case .tokenExchangeFailed(let status, _): return "Token exchange failed (HTTP \(status))."
-        case .malformedResponse: return "Unexpected response from identity provider."
-        case .missingField(let name): return "Missing '\(name)' in token response."
+            let msg = (error as NSError).localizedDescription
+            errorMessage = msg
+            toast = ToastMessage(.error, "Update failed", subtitle: msg)
         }
     }
-}
-
-// MARK: - Coordinator
-
-@MainActor
-final class LoginCoordinator: NSObject,
-    ASWebAuthenticationPresentationContextProviding {
-
-    /// Keep a strong reference during the session lifetime; ASWebAuthenticationSession
-    /// does not retain its presentation context provider.
-    private var activeSession: ASWebAuthenticationSession?
-
-    /// Presents Cognito Hosted UI and resolves with the `code` query param.
-    func authorize(url: URL, callbackScheme: String) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            let session = ASWebAuthenticationSession(
-                url: url,
-                callbackURLScheme: callbackScheme
-            ) { [weak self] callbackURL, error in
-                // Always free the session after the callback fires.
-                defer { self?.activeSession = nil }
-
-                if let error {
-                    let ns = error as NSError
-                    if ns.domain == ASWebAuthenticationSessionErrorDomain,
-                       ns.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
-                        continuation.resume(throwing: LoginError.userCancelled)
-                    } else {
-                        continuation.resume(throwing: error)
-                    }
-                    return
-                }
-
-                guard
-                    let callbackURL,
-                    let code = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?
-                        .queryItems?
-                        .first(where: { $0.name == "code" })?
-                        .value,
-                    !code.isEmpty
-                else {
-                    continuation.resume(throwing: LoginError.noAuthorizationCode)
-                    return
-                }
-
-                continuation.resume(returning: code)
-            }
-
-            session.presentationContextProvider = self
-            session.prefersEphemeralWebBrowserSession = true
-            self.activeSession = session
-
-            if !session.start() {
-                self.activeSession = nil
-                continuation.resume(throwing: LoginError.invalidConfig)
-            }
-        }
-    }
-
-    // MARK: ASWebAuthenticationPresentationContextProviding
-
-    nonisolated func presentationAnchor(
-        for session: ASWebAuthenticationSession
-    ) -> ASPresentationAnchor {
-        #if canImport(UIKit)
-        return MainActor.assumeIsolated {
-            let keyWindow = UIApplication.shared.connectedScenes
-                .first { $0.activationState == .foregroundActive }
-                .flatMap { $0 as? UIWindowScene }
-                .flatMap { $0.keyWindow }
-            return keyWindow ?? ASPresentationAnchor()
-        }
-        #else
-        return ASPresentationAnchor()
-        #endif
-    }
-}
-
-// MARK: - Private helpers
-
-private func encodeFormBody(_ pairs: [(String, String)]) -> String {
-    var allowed = CharacterSet.urlQueryAllowed
-    allowed.remove(charactersIn: "+&=?")
-    return pairs
-        .map { key, value in
-            let k = key.addingPercentEncoding(withAllowedCharacters: allowed) ?? key
-            let v = value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
-            return "\(k)=\(v)"
-        }
-        .joined(separator: "&")
 }

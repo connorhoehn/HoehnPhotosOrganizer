@@ -16,9 +16,32 @@ public func makePKCE() -> (verifier: String, challenge: String) {
     return (verifier, challenge)
 }
 
-/// Decodes the `cognito:username` (or `email`, `preferred_username`) claim
-/// from the JWT payload segment of an id_token.
+/// Decodes a human-friendly display name from the JWT payload segment of an
+/// id_token. Prefers `name` / `given_name` / `email-local-part` /
+/// `preferred_username` over `cognito:username`, because for Cognito pools
+/// where the sub is the username, `cognito:username` is the user's UUID and
+/// is not appropriate for display.
 public func decodeJWTUsername(_ idToken: String) -> String? {
+    guard let payload = decodeJWTPayload(idToken) else { return nil }
+
+    if let n = payload["name"] as? String, !n.isEmpty { return n }
+    if let n = payload["given_name"] as? String, !n.isEmpty { return n }
+    if let email = payload["email"] as? String, !email.isEmpty {
+        // Strip the `@example.com` part — `connorhoehn@gmail.com` →
+        // `connorhoehn`. Less noisy in toolbars / popovers and still
+        // unambiguous for a single-user app.
+        if let at = email.firstIndex(of: "@") {
+            return String(email[..<at])
+        }
+        return email
+    }
+    if let u = payload["preferred_username"] as? String, !u.isEmpty { return u }
+    if let u = payload["cognito:username"] as? String, !u.isEmpty { return u }
+    return nil
+}
+
+/// Returns the raw JWT payload claims, or nil if the token is malformed.
+public func decodeJWTPayload(_ idToken: String) -> [String: Any]? {
     let segments = idToken.split(separator: ".")
     guard segments.count >= 2 else { return nil }
 
@@ -37,11 +60,7 @@ public func decodeJWTUsername(_ idToken: String) -> String? {
     else {
         return nil
     }
-
-    if let u = payload["cognito:username"] as? String, !u.isEmpty { return u }
-    if let u = payload["preferred_username"] as? String, !u.isEmpty { return u }
-    if let u = payload["email"] as? String, !u.isEmpty { return u }
-    return nil
+    return payload
 }
 
 // MARK: - Private helpers

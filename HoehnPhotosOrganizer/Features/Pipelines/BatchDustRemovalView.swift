@@ -124,12 +124,10 @@ struct BatchDustRemovalView: View {
 
             Section("Inpainting") {
                 Picker("Model", selection: $config.inpaintingStrategy) {
-                    Text("Auto (LaMa for dust, MAT for hair)")
+                    Text("LaMa (default)")
                         .tag(InpaintingStrategy.auto)
-                    Text("LaMa (fast, backgrounds)")
+                    Text("LaMa")
                         .tag(InpaintingStrategy.lama)
-                    Text("MAT (faces, skin)")
-                        .tag(InpaintingStrategy.mat)
                 }
 
                 HStack {

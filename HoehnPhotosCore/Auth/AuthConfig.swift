@@ -8,7 +8,15 @@ public enum AuthConfig {
 
     public static let clientId: String = ProcessInfo.processInfo.environment["HOEHN_COGNITO_CLIENT_ID"]
         ?? Bundle.main.object(forInfoDictionaryKey: "HOEHN_COGNITO_CLIENT_ID") as? String
+        ?? UserDefaults.standard.string(forKey: "cognito.clientId")
         ?? "<client-id-placeholder>"
+
+    /// AWS region of the Cognito user pool. Used by the direct
+    /// `cognito-idp.<region>.amazonaws.com` API path (no hosted UI required).
+    public static let cognitoRegion: String = ProcessInfo.processInfo.environment["HOEHN_COGNITO_REGION"]
+        ?? Bundle.main.object(forInfoDictionaryKey: "HOEHN_COGNITO_REGION") as? String
+        ?? UserDefaults.standard.string(forKey: "cognito.region")
+        ?? "us-east-1"
 
     /// Callback URL registered with Cognito. Scheme must also be in Info.plist URL types.
     public static let callbackScheme = "hoehnphotos"
