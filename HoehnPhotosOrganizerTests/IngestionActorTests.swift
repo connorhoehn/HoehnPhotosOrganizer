@@ -166,6 +166,77 @@ struct IngestionActorTests {
                 "NEW.dng must advance to proxyPending after ingestion")
     }
 
+    // MARK: - deduplicateRawJpgPairs
+
+    private func url(_ filename: String) -> URL {
+        URL(fileURLWithPath: "/fake/\(filename)")
+    }
+
+    @Test
+    func testRawJpgPairKeepsRawWithCompanion() {
+        // IMG_0001.dng + IMG_0001.jpg → single entry, url=dng, jpgCompanion=jpg
+        let inputs = [url("IMG_0001.dng"), url("IMG_0001.jpg")]
+        let result = IngestionActor.deduplicateRawJpgPairs(inputs)
+        #expect(result.count == 1, "RAW+JPG pair must produce one entry")
+        #expect(result[0].url.lastPathComponent == "IMG_0001.dng")
+        #expect(result[0].jpgCompanion?.lastPathComponent == "IMG_0001.jpg")
+    }
+
+    @Test
+    func testJpgOnlyProducesEntryWithNoCompanion() {
+        let inputs = [url("IMG_0002.jpg")]
+        let result = IngestionActor.deduplicateRawJpgPairs(inputs)
+        #expect(result.count == 1, "JPG-only must produce one entry")
+        #expect(result[0].url.lastPathComponent == "IMG_0002.jpg")
+        #expect(result[0].jpgCompanion == nil, "No companion when there is no RAW")
+    }
+
+    @Test
+    func testRawOnlyProducesEntryWithNoCompanion() {
+        let inputs = [url("IMG_0003.arw")]
+        let result = IngestionActor.deduplicateRawJpgPairs(inputs)
+        #expect(result.count == 1, "RAW-only must produce one entry")
+        #expect(result[0].url.lastPathComponent == "IMG_0003.arw")
+        #expect(result[0].jpgCompanion == nil)
+    }
+
+    @Test
+    func testMultipleRawsSameStemProduceMultipleEntries() {
+        // Edge case: camera wrote both DNG + CR3 with same stem (unlikely but possible)
+        let inputs = [url("MULTI.dng"), url("MULTI.cr3"), url("MULTI.jpg")]
+        let result = IngestionActor.deduplicateRawJpgPairs(inputs)
+        #expect(result.count == 2, "Two RAWs same stem must produce two entries")
+        // One of them gets the JPG companion; the other does not
+        let withCompanion = result.filter { $0.jpgCompanion != nil }
+        #expect(withCompanion.count == 1, "Exactly one RAW entry receives the JPG companion")
+        // The standalone JPG must NOT appear as a top-level entry
+        let jpgEntries = result.filter { $0.url.pathExtension.lowercased() == "jpg" }
+        #expect(jpgEntries.isEmpty, "JPG must not appear as a top-level entry when a RAW exists")
+    }
+
+    @Test
+    func testStemMatchingIsCaseInsensitive() {
+        // Camera writes IMG_0001.DNG + IMG_0001.JPG (uppercase extensions)
+        let inputs = [url("IMG_0001.DNG"), url("IMG_0001.JPG")]
+        let result = IngestionActor.deduplicateRawJpgPairs(inputs)
+        #expect(result.count == 1, "Uppercase extensions must still be treated as a RAW+JPG pair")
+        let jpgAsTopLevel = result.filter { $0.url.pathExtension.uppercased() == "JPG" }
+        #expect(jpgAsTopLevel.isEmpty, "JPG must not appear as a top-level entry even with uppercase extension")
+    }
+
+    @Test
+    func testDifferentStemsProduceIndependentEntries() {
+        // ABC.dng and XYZ.jpg have different stems — must not be paired
+        let inputs = [url("ABC.dng"), url("XYZ.jpg")]
+        let result = IngestionActor.deduplicateRawJpgPairs(inputs)
+        #expect(result.count == 2, "Different stems must each produce their own entry")
+        let abcEntry = result.first { $0.url.lastPathComponent == "ABC.dng" }
+        let xyzEntry = result.first { $0.url.lastPathComponent == "XYZ.jpg" }
+        #expect(abcEntry != nil, "ABC.dng must be present")
+        #expect(xyzEntry != nil, "XYZ.jpg must be present")
+        #expect(abcEntry?.jpgCompanion == nil, "ABC.dng must not pick up XYZ.jpg as companion")
+    }
+
     // MARK: - Batch flush: multiple files land in DB via bulkUpsert path
 
     @Test
