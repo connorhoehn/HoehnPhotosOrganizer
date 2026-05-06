@@ -128,4 +128,72 @@ struct AppDatabaseTests {
             _ = try AppDatabase.makeInMemory()
         }
     }
+
+    // MARK: - v34: aws_sync_cursors (durable pull cursor)
+
+    @Test
+    func testV34AwsSyncCursorsTableExists() async throws {
+        // v34_pull_cursor: the aws_sync_cursors table must exist so
+        // AWSPullCoordinator can persist its cursor across app reinstalls.
+        let db = try AppDatabase.makeInMemory()
+        try await db.dbPool.read { conn in
+            let tables = try String.fetchAll(conn,
+                sql: "SELECT name FROM sqlite_master WHERE type='table' AND name='aws_sync_cursors'")
+            #expect(tables.count == 1, "aws_sync_cursors table must exist after v34 migration")
+        }
+    }
+
+    @Test
+    func testV34AwsSyncCursorsUpsertRoundTrip() async throws {
+        // Verify the table schema supports ON CONFLICT(key) DO UPDATE used by storeLastPulledAt.
+        let db = try AppDatabase.makeInMemory()
+        let key = "aws.pull.lastPulledAt"
+        let value1 = "2026-01-01T00:00:00Z"
+        let value2 = "2026-06-01T00:00:00Z"
+
+        try await db.dbPool.write { conn in
+            try conn.execute(sql: "INSERT INTO aws_sync_cursors(key, value) VALUES (?, ?)",
+                             arguments: [key, value1])
+            try conn.execute(sql: """
+                INSERT INTO aws_sync_cursors(key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                arguments: [key, value2])
+        }
+        let stored = try await db.dbPool.read { conn in
+            try String.fetchOne(conn,
+                sql: "SELECT value FROM aws_sync_cursors WHERE key = ?",
+                arguments: [key])
+        }
+        #expect(stored == value2, "Upsert must overwrite the existing cursor value")
+    }
+
+    // MARK: - v35: photo_assets_fts (FTS5 keyword search)
+
+    @Test
+    func testV35FTS5VirtualTableExists() async throws {
+        // v35_fts5_search: the photo_assets_fts virtual table must be created
+        // by the migration so FTS5 keyword search is available.
+        let db = try AppDatabase.makeInMemory()
+        try await db.dbPool.read { conn in
+            let tables = try String.fetchAll(conn,
+                sql: "SELECT name FROM sqlite_master WHERE type='table' AND name='photo_assets_fts'")
+            #expect(tables.count == 1, "photo_assets_fts virtual table must exist after v35 migration")
+        }
+    }
+
+    @Test
+    func testV35FTS5TriggersExist() async throws {
+        // The three sync triggers (insert / update / delete) must be present so
+        // the FTS5 index stays in sync with photo_assets without manual calls.
+        let db = try AppDatabase.makeInMemory()
+        try await db.dbPool.read { conn in
+            let triggers = try String.fetchAll(conn,
+                sql: "SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'photo_assets_fts_%'")
+            let names = Set(triggers)
+            #expect(names.contains("photo_assets_fts_insert"), "INSERT trigger must exist")
+            #expect(names.contains("photo_assets_fts_update"), "UPDATE trigger must exist")
+            #expect(names.contains("photo_assets_fts_delete"), "DELETE trigger must exist")
+        }
+    }
 }
