@@ -344,29 +344,15 @@ actor PhotoRepository {
         }
         if let kws = filter.keywords, !kws.isEmpty {
             for kw in kws {
-                // Split into tokens on non-alphanumeric chars AND camelCase boundaries,
-                // then join with % wildcards for fuzzy matching.
-                // "TMax 400" → ["T", "Max", "400"] → "%T%Max%400%" matches "Kodak T-Max 400"
-                var tokens: [String] = []
-                for word in kw.components(separatedBy: CharacterSet.alphanumerics.inverted) where !word.isEmpty {
-                    // Split camelCase: "TMax" → ["T", "Max"]
-                    var current = ""
-                    for (i, char) in word.enumerated() {
-                        if char.isUppercase && i > 0 {
-                            if !current.isEmpty { tokens.append(current) }
-                            current = String(char)
-                        } else {
-                            current.append(char)
-                        }
-                    }
-                    if !current.isEmpty { tokens.append(current) }
-                }
-                guard !tokens.isEmpty else { continue }
-                let fuzzy = tokens.joined(separator: "%")
-                conditions.append("(canonical_name LIKE ? OR raw_exif_json LIKE ? OR user_metadata_json LIKE ?)")
-                arguments.append("%\(fuzzy)%")
-                arguments.append("%\(fuzzy)%")
-                arguments.append("%\(fuzzy)%")
+                let words = kw.components(separatedBy: CharacterSet.alphanumerics.inverted)
+                    .filter { !$0.isEmpty }
+                guard !words.isEmpty else { continue }
+                // FTS5 prefix query: each word becomes "word*" so "Kodak Portra 400"
+                // matches any row where all three prefixes appear in canonical_name
+                // or user_metadata_json.
+                let ftsQuery = words.map { "\($0)*" }.joined(separator: " ")
+                conditions.append("id IN (SELECT id FROM photo_assets_fts WHERE photo_assets_fts MATCH ?)")
+                arguments.append(ftsQuery)
             }
         }
 

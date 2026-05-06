@@ -871,6 +871,55 @@ final class AppDatabase: Sendable {
             }
         }
 
+        // v35: FTS5 full-text search on photo_assets.
+        // Replaces the O(N) triple-LIKE keyword scan with an indexed FTS lookup.
+        // Standalone table (not content-table) avoids the INTEGER rowid requirement
+        // imposed by content= mode on a TEXT-PK source table.
+        // Three triggers keep the index in sync with photo_assets writes.
+        migrator.registerMigration("v35_fts5_search") { db in
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE IF NOT EXISTS photo_assets_fts
+                USING fts5(
+                    id UNINDEXED,
+                    canonical_name,
+                    metadata_summary,
+                    tokenize = 'unicode61'
+                )
+                """)
+
+            try db.execute(sql: """
+                INSERT INTO photo_assets_fts(id, canonical_name, metadata_summary)
+                SELECT id, canonical_name, COALESCE(user_metadata_json, '')
+                FROM photo_assets
+                """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER IF NOT EXISTS photo_assets_fts_insert
+                    AFTER INSERT ON photo_assets BEGIN
+                    INSERT INTO photo_assets_fts(id, canonical_name, metadata_summary)
+                    VALUES (new.id, new.canonical_name, COALESCE(new.user_metadata_json, ''));
+                END
+                """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER IF NOT EXISTS photo_assets_fts_update
+                    AFTER UPDATE ON photo_assets BEGIN
+                    DELETE FROM photo_assets_fts WHERE id = old.id;
+                    INSERT INTO photo_assets_fts(id, canonical_name, metadata_summary)
+                    VALUES (new.id, new.canonical_name, COALESCE(new.user_metadata_json, ''));
+                END
+                """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER IF NOT EXISTS photo_assets_fts_delete
+                    AFTER DELETE ON photo_assets BEGIN
+                    DELETE FROM photo_assets_fts WHERE id = old.id;
+                END
+                """)
+
+            print("[v35_fts5_search] Migration applied — photo_assets_fts virtual table + 3 triggers created")
+        }
+
         try migrator.migrate(dbPool)
         validateMigrations()
     }
