@@ -111,6 +111,9 @@ public enum CognitoAuthClient {
 
     // MARK: - Internal HTTP
 
+    /// Seam for unit tests. Production code leaves this as `.shared`.
+    static var _session: URLSession = .shared
+
     private static func post(
         target: String,
         payload: [String: Any]
@@ -131,7 +134,7 @@ public enum CognitoAuthClient {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await Self._session.data(for: request)
         } catch {
             throw AuthError.network(error)
         }
