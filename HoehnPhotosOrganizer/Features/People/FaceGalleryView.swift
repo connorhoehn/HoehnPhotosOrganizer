@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import HoehnPhotosCore
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -1659,6 +1660,7 @@ struct FaceGalleryView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -2143,6 +2145,7 @@ private struct PersonSummaryCard: View {
             .animation(.easeInOut(duration: 0.15), value: isHovered)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(name), \(faceCount) photo\(faceCount == 1 ? "" : "s")")
         .onHover { isHovered = $0 }
     }
 }
@@ -2248,6 +2251,9 @@ private struct FaceChipCell: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(faceChipAccessibilityLabel)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .contextMenu {
             if record.needsReview {
                 Button("Confirm match") { onConfirmReview(true) }
@@ -2274,6 +2280,13 @@ private struct FaceChipCell: View {
                         .foregroundStyle(.tertiary)
                 )
         }
+    }
+
+    private var faceChipAccessibilityLabel: String {
+        if let name = record.personName {
+            return record.needsReview ? "Possible match: \(name)" : name
+        }
+        return "Unlabeled face"
     }
 
     private func loadImage() async {
@@ -2465,6 +2478,7 @@ private struct FilterEmptyStateView: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
         .padding(.horizontal, 40)
+        .accessibilityElement(children: .combine)
     }
 }
 
