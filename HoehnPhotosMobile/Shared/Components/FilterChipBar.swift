@@ -55,6 +55,8 @@ struct FilterChipBar: View {
                                       : HPColor.chipInactive)
                         )
                         .foregroundStyle(isActive ? .white : .primary)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }

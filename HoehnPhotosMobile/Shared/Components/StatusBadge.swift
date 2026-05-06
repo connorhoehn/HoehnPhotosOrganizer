@@ -14,6 +14,8 @@ struct StatusBadge: View {
     var body: some View {
         Text(label)
             .font(HPFont.badgeLabel)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
             .padding(.horizontal, HPSpacing.sm)
             .padding(.vertical, 3)
             .foregroundStyle(foregroundColor)
