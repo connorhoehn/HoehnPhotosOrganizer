@@ -825,6 +825,43 @@ final class AppDatabase: Sendable {
             print("[v32_aws_sync_columns] Migration applied — aws_synced_at + aws_version added to 5 tables")
         }
 
+        // v33: Performance indexes for 100 GB+ library scale.
+        // All six are additive (CREATE INDEX IF NOT EXISTS) — no data modified.
+        // Runs once on first launch after upgrade (~5–10 s on SSD).
+        migrator.registerMigration("v33_bulk_import_indexes") { db in
+            // CRITICAL: covers the main gallery WHERE + ORDER BY
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS idx_photo_assets_library_view
+                ON photo_assets(import_status, hidden_from_library, updated_at DESC)
+                """)
+            // CRITICAL: eliminates full scan in AWS dirty-row query (runs every 30 s)
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS idx_photo_assets_aws_dirty
+                ON photo_assets(aws_synced_at, updated_at)
+                """)
+            // HIGH: every background pipeline stage queries by processing_state
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS idx_photo_assets_processing_state
+                ON photo_assets(processing_state)
+                """)
+            // HIGH: face-indexing backlog query (processing_state + face_indexed_at IS NULL)
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS idx_photo_assets_face_indexed
+                ON photo_assets(processing_state, face_indexed_at)
+                """)
+            // MEDIUM: curation stats with import_status filter
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS idx_photo_assets_import_curation
+                ON photo_assets(import_status, curation_state)
+                """)
+            // MEDIUM: soft-delete queries
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS idx_photo_assets_soft_delete
+                ON photo_assets(deleted_at)
+                """)
+            print("[v33_bulk_import_indexes] Migration applied — 6 performance indexes added to photo_assets")
+        }
+
         try migrator.migrate(dbPool)
         validateMigrations()
     }
