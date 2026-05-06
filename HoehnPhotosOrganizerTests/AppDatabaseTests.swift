@@ -196,4 +196,30 @@ struct AppDatabaseTests {
             #expect(names.contains("photo_assets_fts_delete"), "DELETE trigger must exist")
         }
     }
+
+    // MARK: - v33: bulk-import performance indexes
+
+    @Test
+    func testV33BulkImportIndexesExist() async throws {
+        // v33_bulk_import_indexes: all 6 performance indexes must survive future migrations.
+        // A dropped index causes full-table scans on photo_assets — invisible slowness at 100k rows.
+        let db = try AppDatabase.makeInMemory()
+        try await db.dbPool.read { conn in
+            let indexes = try String.fetchAll(conn,
+                sql: "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='photo_assets'")
+            let names = Set(indexes)
+            #expect(names.contains("idx_photo_assets_library_view"),
+                    "CRITICAL: main gallery query index must exist")
+            #expect(names.contains("idx_photo_assets_aws_dirty"),
+                    "CRITICAL: sync dirty-row scan index must exist")
+            #expect(names.contains("idx_photo_assets_processing_state"),
+                    "HIGH: pipeline stage scan index must exist")
+            #expect(names.contains("idx_photo_assets_face_indexed"),
+                    "HIGH: face-index backlog scan index must exist")
+            #expect(names.contains("idx_photo_assets_import_curation"),
+                    "MEDIUM: curation stats index must exist")
+            #expect(names.contains("idx_photo_assets_soft_delete"),
+                    "MEDIUM: soft-delete query index must exist")
+        }
+    }
 }
