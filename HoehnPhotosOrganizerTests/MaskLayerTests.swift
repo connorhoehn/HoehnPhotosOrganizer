@@ -75,4 +75,35 @@ final class MaskLayerTests: XCTestCase {
         XCTAssertEqual(decoded[0].sources.count, 2)
         XCTAssertEqual(decoded[0].sources[1].combineMode, .subtract)
     }
+
+    // MARK: - isGlobal
+
+    func testIsGlobalReturnsTrueWhenNoSources() {
+        let layer = AdjustmentLayer(label: "Global", sources: [])
+        XCTAssertTrue(layer.isGlobal, "A layer with no sources must be classified as a global adjustment")
+    }
+
+    func testIsGlobalReturnsFalseWhenSourcesPresent() {
+        let source = MaskSource(sourceType: .ellipse(normalizedRect: CGRect(x: 0.1, y: 0.1, width: 0.5, height: 0.5)))
+        let layer = AdjustmentLayer(label: "Masked", sources: [source])
+        XCTAssertFalse(layer.isGlobal, "A layer with at least one source must not be classified as global")
+    }
+
+    // MARK: - adjustmentSummary
+
+    func testAdjustmentSummaryReflectsNonZeroExposure() {
+        var adj = PhotoAdjustments()
+        adj.exposure = 1.5
+        let layer = AdjustmentLayer(label: "Bright", adjustments: adj, sources: [])
+        let summary = layer.adjustmentSummary
+        XCTAssertTrue(summary.contains("Exp"), "Summary must mention 'Exp' when exposure is non-zero")
+        XCTAssertTrue(summary.contains("+1.5") || summary.contains("1.5"),
+                      "Summary must include the exposure value")
+    }
+
+    func testAdjustmentSummaryReturnsNoAdjustmentsWhenAllZero() {
+        let layer = AdjustmentLayer(label: "Identity", adjustments: PhotoAdjustments(), sources: [])
+        XCTAssertEqual(layer.adjustmentSummary, "No adjustments",
+                       "Identity adjustments must produce 'No adjustments' summary")
+    }
 }
