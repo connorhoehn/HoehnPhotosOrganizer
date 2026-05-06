@@ -59,4 +59,46 @@ struct ProcessingStateTests {
         #expect(fetched?.processingState != ProcessingState.indexed.rawValue,
                 "After advancing past indexed, state must not revert to indexed")
     }
+
+    @Test
+    func testSnakeCaseRawValuesMatchDatabaseColumnValues() {
+        // Raw values must exactly match the strings stored in SQLite — a camelCase drift
+        // silently makes all pipeline-stage queries return nothing.
+        #expect(ProcessingState.proxyPending.rawValue == "proxy_pending")
+        #expect(ProcessingState.proxyReady.rawValue == "proxy_ready")
+        #expect(ProcessingState.metadataEnriched.rawValue == "metadata_enriched")
+        #expect(ProcessingState.syncPending.rawValue == "sync_pending")
+        // indexed uses its case name directly (no underscore needed)
+        #expect(ProcessingState.indexed.rawValue == "indexed")
+    }
+
+    @Test
+    func testAllStatesRoundTripThroughPhotoRepository() async throws {
+        let db = try AppDatabase.makeInMemory()
+        let photoRepo = PhotoRepository(db: db)
+        var asset = PhotoAsset.new(canonicalName: "roundtrip.ARW", role: .original,
+                                   filePath: "/tmp/roundtrip.ARW", fileSize: 1000)
+        try await photoRepo.upsert(asset)
+
+        for state in ProcessingState.allCases {
+            try await photoRepo.updateProcessingState(id: asset.id, state: state)
+            let fetched = try await photoRepo.fetchById(asset.id)
+            #expect(fetched?.processingState == state.rawValue,
+                    "State \(state.rawValue) must survive a DB write and read-back")
+        }
+    }
+
+    @Test
+    func testInitFromRawValueReturnsNilForUnknownString() {
+        #expect(ProcessingState(rawValue: "not_a_state") == nil)
+        #expect(ProcessingState(rawValue: "") == nil)
+        #expect(ProcessingState(rawValue: "proxyPending") == nil, "camelCase form must not match")
+    }
+
+    @Test
+    func testTitlePropertyIsNonEmptyForAllCases() {
+        for state in ProcessingState.allCases {
+            #expect(!state.title.isEmpty, "title must be non-empty for state \(state.rawValue)")
+        }
+    }
 }
