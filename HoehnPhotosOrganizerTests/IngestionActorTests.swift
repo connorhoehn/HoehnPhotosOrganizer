@@ -100,4 +100,43 @@ struct IngestionActorTests {
         #expect(corruptRecord != nil, "Corrupt file should still have a DB record")
         #expect(validRecord != nil,   "Valid file should have a DB record")
     }
+
+    // MARK: - Batch flush: multiple files land in DB via bulkUpsert path
+
+    @Test
+    func testBatchFlushLandsAllFilesInDB() async throws {
+        // Verify that assets accumulated in the pending batch are all committed to GRDB.
+        // Uses 3 files — well under batchSize (250) — so the end-of-scan flush is exercised.
+        let db = try AppDatabase.makeInMemory()
+        let photoRepo = PhotoRepository(db: db)
+        let driveRepo = DriveRepository(db: db)
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-batchflush-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let names = ["A.dng", "B.jpg", "C.tiff"]
+        for name in names {
+            try Data().write(to: tempDir.appendingPathComponent(name))
+        }
+
+        let drive = DriveInfo(
+            volumeLabel: "FlushTestDrive",
+            mountPoint: tempDir,
+            totalBytes: 100_000_000,
+            freeBytes: 50_000_000,
+            volumeUUID: UUID().uuidString
+        )
+
+        let actor = IngestionActor(photoRepo: photoRepo, driveRepo: driveRepo)
+        for await _ in actor.startIngestion(drive: drive) { /* consume stream */ }
+
+        for name in names {
+            let row = try await photoRepo.fetchByCanonicalName(name)
+            #expect(row != nil, "\(name) must be in DB after batch flush")
+            #expect(row?.processingState == ProcessingState.proxyPending.rawValue,
+                    "\(name) should be in proxyPending after ingestion")
+        }
+    }
 }

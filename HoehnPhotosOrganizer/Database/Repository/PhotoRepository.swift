@@ -54,6 +54,19 @@ actor PhotoRepository {
         }
     }
 
+    /// Insert or replace multiple assets in a single transaction.
+    /// Uses the same ON CONFLICT DO UPDATE logic as `upsert(_:)`.
+    func bulkUpsert(_ assets: [PhotoAsset]) async throws {
+        guard !assets.isEmpty else { return }
+        let now = ISO8601DateFormatter().string(from: .now)
+        try await db.dbPool.write { db in
+            for var asset in assets {
+                asset.updatedAt = now
+                try asset.upsert(db)
+            }
+        }
+    }
+
     /// Bulk update `user_metadata_json` for multiple photos in a single transaction.
     /// `updates` maps photo ID → JSON string.
     func bulkUpdateUserMetadata(_ updates: [String: String]) async throws {

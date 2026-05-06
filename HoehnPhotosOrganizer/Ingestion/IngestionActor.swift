@@ -99,6 +99,10 @@ actor IngestionActor {
         }
     }
 
+    /// Number of successfully-processed assets accumulated before a single bulk DB write.
+    /// Reduces WAL commit count from O(N) to O(N/batchSize) — critical at 100 k+ files.
+    private static let batchSize = 250
+
     // MARK: - Core ingestion loop
 
     private func runIngestion(
@@ -113,6 +117,24 @@ actor IngestionActor {
         let total = files.count
         var processed = 0
         var failed = 0
+        var pendingBatch: [PhotoAsset] = []
+
+        /// Flush the current batch to GRDB in one transaction.
+        func flushBatch() async {
+            guard !pendingBatch.isEmpty else { return }
+            do {
+                try await photoRepo.bulkUpsert(pendingBatch)
+                processed += pendingBatch.count
+            } catch {
+                // Rare: transaction-level failure — fall back to individual writes so
+                // per-file errors are preserved rather than losing the whole batch.
+                for asset in pendingBatch {
+                    try? await photoRepo.upsert(asset)
+                    processed += 1
+                }
+            }
+            pendingBatch.removeAll(keepingCapacity: true)
+        }
 
         for url in files {
             let canonicalName = url.lastPathComponent
@@ -183,16 +205,22 @@ actor IngestionActor {
 
                 // Advance: indexed → proxyPending (EXIF stored, geocode attempted).
                 asset.processingState = ProcessingState.proxyPending.rawValue
-                try await photoRepo.upsert(asset)
-
-                processed += 1
+                pendingBatch.append(asset)
+                if pendingBatch.count >= Self.batchSize {
+                    await flushBatch()
+                }
             } catch {
-                // ING-8: Per-file failure — record error_message but continue the batch.
+                // ING-8: Per-file failure — flush any pending batch first so progress
+                // is preserved, then record error_message and continue.
+                await flushBatch()
                 asset.errorMessage = error.localizedDescription
                 try? await photoRepo.upsert(asset)
                 failed += 1
             }
         }
+
+        // Flush any remaining assets that didn't fill a full batch.
+        await flushBatch()
 
         // Final completion snapshot.
         continuation.yield(IngestionProgress(
