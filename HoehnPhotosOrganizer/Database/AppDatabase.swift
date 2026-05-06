@@ -862,6 +862,15 @@ final class AppDatabase: Sendable {
             print("[v33_bulk_import_indexes] Migration applied — 6 performance indexes added to photo_assets")
         }
 
+        // v34: Durable pull cursor table. Replaces UserDefaults storage for
+        // AWSPullCoordinator so the cursor survives reinstalls and data clears.
+        migrator.registerMigration("v34_pull_cursor") { db in
+            try db.create(table: "aws_sync_cursors", ifNotExists: true) { t in
+                t.column("key", .text).notNull().primaryKey()
+                t.column("value", .text).notNull()
+            }
+        }
+
         try migrator.migrate(dbPool)
         validateMigrations()
     }

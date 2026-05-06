@@ -265,6 +265,14 @@ public final class AppDatabase: @unchecked Sendable {
             }
         }
 
+        // ios_v3: Durable pull cursor table (mirrors v34_pull_cursor on macOS).
+        migrator.registerMigration("ios_v3_pull_cursor") { db in
+            try db.create(table: "aws_sync_cursors", ifNotExists: true) { t in
+                t.column("key", .text).notNull().primaryKey()
+                t.column("value", .text).notNull()
+            }
+        }
+
         try migrator.migrate(dbPool)
     }
 }

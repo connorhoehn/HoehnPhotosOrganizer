@@ -48,8 +48,11 @@ public actor AWSPullCoordinator {
 
     private let appDatabase: AppDatabase
     private let syncClient: AWSPhotoSyncClient
-    private let lastPulledAtKey: String
-    private let defaults: UserDefaults
+
+    /// UserDefaults key used in older versions — read once to migrate, never written again.
+    private static let legacyDefaultsKey = "com.hoehn-photos.aws.lastPulledAt"
+    /// Primary key in the `aws_sync_cursors` GRDB table.
+    private static let cursorDBKey = "aws.pull.lastPulledAt"
 
     private let logger = Logger(
         subsystem: "com.hoehn-photos.sync",
@@ -71,8 +74,6 @@ public actor AWSPullCoordinator {
     ) {
         self.appDatabase = appDatabase
         self.syncClient = syncClient
-        self.lastPulledAtKey = lastPulledAtKey
-        self.defaults = UserDefaults.standard
     }
 
     // MARK: - Public API
@@ -114,7 +115,7 @@ public actor AWSPullCoordinator {
     /// Immediate pull — intended for push-notification / user-triggered refresh.
     /// Safe to call even when the periodic loop is not running.
     public func drainNow() async {
-        let since = loadLastPulledAt()
+        let since = await loadLastPulledAt()
         logger.debug("drainNow: pulling since=\(since.timeIntervalSince1970, privacy: .public)")
 
         let items: [[String: AnyCodable]]
@@ -162,7 +163,7 @@ public actor AWSPullCoordinator {
         // syncTimestamp (shouldn't happen for a 200), fall back to `now` so
         // we don't re-pull the same window forever.
         let cursor = nextSince ?? Date()
-        storeLastPulledAt(cursor)
+        await storeLastPulledAt(cursor)
         logger.notice(
             "drainNow: applied=\(applied, privacy: .public) skipped=\(skipped, privacy: .public) cursor=\(Self.iso8601(cursor), privacy: .public)"
         )
@@ -174,19 +175,40 @@ public actor AWSPullCoordinator {
         isRunning
     }
 
-    // MARK: - Cursor persistence
+    // MARK: - Cursor persistence (GRDB-backed, crash-durable)
 
-    private func loadLastPulledAt() -> Date {
-        guard let s = defaults.string(forKey: lastPulledAtKey),
-              let d = Self.parseISO8601(s)
-        else {
-            return Date(timeIntervalSince1970: 0)
+    private func loadLastPulledAt() async -> Date {
+        // Try GRDB first.
+        if let stored = try? await appDatabase.dbPool.read({ db in
+            try Row.fetchOne(db,
+                sql: "SELECT value FROM aws_sync_cursors WHERE key = ?",
+                arguments: [Self.cursorDBKey])
+                .flatMap { $0["value"] as? String }
+        }), let d = Self.parseISO8601(stored) {
+            return d
         }
-        return d
+        // Transparent migration: pick up a cursor written by an older version
+        // that used UserDefaults. On success, promote it to GRDB and clear UD.
+        if let legacy = UserDefaults.standard.string(forKey: Self.legacyDefaultsKey),
+           let d = Self.parseISO8601(legacy) {
+            await storeLastPulledAt(d)
+            UserDefaults.standard.removeObject(forKey: Self.legacyDefaultsKey)
+            return d
+        }
+        return Date(timeIntervalSince1970: 0)
     }
 
-    private func storeLastPulledAt(_ date: Date) {
-        defaults.set(Self.iso8601(date), forKey: lastPulledAtKey)
+    private func storeLastPulledAt(_ date: Date) async {
+        try? await appDatabase.dbPool.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO aws_sync_cursors(key, value)
+                    VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                    """,
+                arguments: [Self.cursorDBKey, Self.iso8601(date)]
+            )
+        }
     }
 
     // MARK: - Item parsing
