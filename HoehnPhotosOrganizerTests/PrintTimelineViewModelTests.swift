@@ -5,10 +5,24 @@ import Testing
 @MainActor
 struct PrintTimelineViewModelTests {
 
+    // MARK: - Helpers
+
+    private func seedPhoto(id: String, in db: AppDatabase) async throws {
+        var asset = PhotoAsset.new(
+            canonicalName: "\(id).dng",
+            role: .original,
+            filePath: "/tmp/\(id).dng",
+            fileSize: 1024
+        )
+        asset.id = id
+        try await PhotoRepository(db: db).bulkUpsert([asset])
+    }
+
     // MARK: - Test loadTimeline method loads print attempts for a photo
 
     @Test func testLoadTimelineLoadsAttemptsForPhoto() async throws {
         let db = try AppDatabase.makeInMemory()
+        try await seedPhoto(id: "photo-001", in: db)
         let repository = PrintAttemptRepository(db.dbPool)
 
         // Create a print attempt
@@ -44,6 +58,7 @@ struct PrintTimelineViewModelTests {
 
     @Test func testLoadTimelineOrdersChronologically() async throws {
         let db = try AppDatabase.makeInMemory()
+        try await seedPhoto(id: "photo-001", in: db)
         let repository = PrintAttemptRepository(db.dbPool)
 
         let baseDate = Date()
