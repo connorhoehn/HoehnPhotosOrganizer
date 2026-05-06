@@ -17,10 +17,14 @@ struct LocationInfo {
 
 actor GeocoderService {
     private let geocoder = CLGeocoder()
+    private var cache: [String: LocationInfo] = [:]
 
     func reverseGeocode(latitude: Double, longitude: Double) async throws -> LocationInfo {
+        let key = "\(latitude),\(longitude)"
+        if let hit = cache[key] { return hit }
+
         let location = CLLocation(latitude: latitude, longitude: longitude)
-        return try await withCheckedThrowingContinuation { continuation in
+        let info: LocationInfo = try await withCheckedThrowingContinuation { continuation in
             geocoder.reverseGeocodeLocation(location) { placemarks, error in
                 if let error {
                     continuation.resume(throwing: error)
@@ -34,5 +38,11 @@ actor GeocoderService {
                 ))
             }
         }
+        cache[key] = info
+        return info
+    }
+
+    func seedCacheForTesting(latitude: Double, longitude: Double, info: LocationInfo) {
+        cache["\(latitude),\(longitude)"] = info
     }
 }
