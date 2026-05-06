@@ -1,40 +1,96 @@
-// SyncStatusViewModelTests.swift
-// HoehnPhotosOrganizerTests
-//
-// SYNC-9: UI reflects sync state per photo — localOnly, syncing, synced, error.
-// All tests are stub skips; Wave 2 implementation will drive them RED → GREEN.
+import Testing
+import Foundation
+import GRDB
+@testable import HoehnPhotosOrganizer
 
-import XCTest
+struct SyncStatusViewModelTests {
 
-final class SyncStatusViewModelTests: XCTestCase {
+    // MARK: - Helpers
 
-    /// SYNC-9: Newly ingested photo shows "Local only" sync state.
-    /// Verifies: SyncStatusViewModel(photo: newPhoto).status == .localOnly
-    func test_syncStatus_localOnly() throws {
-        throw XCTSkip("Wave 2+ implementation: new photo → SyncStatusViewModel.status == .localOnly → label \"Local only\"")
+    private func seedPhoto(canonicalName: String, in db: AppDatabase) async throws {
+        let asset = PhotoAsset.new(
+            canonicalName: canonicalName,
+            role: .original,
+            filePath: "/tmp/\(canonicalName)",
+            fileSize: 1024
+        )
+        try await PhotoRepository(db: db).bulkUpsert([asset])
     }
 
-    /// SYNC-9: Upload in progress; UI shows "Syncing" with percent complete.
-    /// Verifies: SyncStatusViewModel.status == .syncing(progress: 0.42) → label includes progress %.
-    func test_syncStatus_syncing() throws {
-        throw XCTSkip("Wave 2+ implementation: upload in progress → status == .syncing(progress: X) → UI shows \"Syncing X%\"")
+    private func writeSyncStatus(_ status: SyncStatus, canonicalName: String, in db: AppDatabase) async throws {
+        let json = String(data: try JSONEncoder().encode(status), encoding: .utf8)!
+        try await db.dbPool.write { d in
+            try d.execute(
+                sql: "UPDATE photo_assets SET sync_status = ? WHERE canonical_name = ?",
+                arguments: [json, canonicalName]
+            )
+        }
     }
 
-    /// SYNC-9: Upload complete; UI shows "Synced" with timestamp.
-    /// Verifies: SyncStatusViewModel.status == .synced(at: Date) → label shows timestamp.
-    func test_syncStatus_synced() throws {
-        throw XCTSkip("Wave 2+ implementation: upload complete → status == .synced(at: Date) → UI shows \"Synced\" + formatted timestamp")
+    // MARK: - Tests
+
+    @MainActor @Test
+    func test_syncStatus_localOnly() async throws {
+        // Newly inserted photo has default sync_status = "localOnly" (string, not JSON).
+        // SyncStatusViewModel falls back to .localOnly when JSON decode fails.
+        let db = try AppDatabase.makeInMemory()
+        try await seedPhoto(canonicalName: "local.dng", in: db)
+
+        let vm = SyncStatusViewModel(db: db)
+        vm.observeSyncStatus(for: "local.dng")
+        // .scheduling: .immediate fires synchronously on subscription
+        #expect(vm.syncStatus == .localOnly)
     }
 
-    /// SYNC-9: Upload failed; UI shows "Error (retry)" with failure reason.
-    /// Verifies: SyncStatusViewModel.status == .error(reason: String) → label shows \"Error (retry): {reason}\".
-    func test_syncStatus_error() throws {
-        throw XCTSkip("Wave 2+ implementation: upload failed → status == .error(reason: \"Network timeout\") → \"Error (retry): Network timeout\"")
+    @MainActor @Test
+    func test_syncStatus_syncing() async throws {
+        let db = try AppDatabase.makeInMemory()
+        try await seedPhoto(canonicalName: "syncing.dng", in: db)
+        try await writeSyncStatus(.syncing(progress: 0.42), canonicalName: "syncing.dng", in: db)
+
+        let vm = SyncStatusViewModel(db: db)
+        vm.observeSyncStatus(for: "syncing.dng")
+        #expect(vm.syncStatus == .syncing(progress: 0.42))
     }
 
-    /// SYNC-9: Sync status persisted to DB, survives app restart.
-    /// Verifies: syncState column in photo_assets row updated after sync; re-queried value matches.
-    func test_syncStatus_persistence() throws {
-        throw XCTSkip("Wave 2+ implementation: status == .synced written to DB → app restart → re-queried status == .synced")
+    @MainActor @Test
+    func test_syncStatus_synced() async throws {
+        let db = try AppDatabase.makeInMemory()
+        try await seedPhoto(canonicalName: "synced.dng", in: db)
+        let syncedDate = Date(timeIntervalSince1970: 1710595200)
+        try await writeSyncStatus(.synced(timestamp: syncedDate), canonicalName: "synced.dng", in: db)
+
+        let vm = SyncStatusViewModel(db: db)
+        vm.observeSyncStatus(for: "synced.dng")
+        #expect(vm.syncStatus == .synced(timestamp: syncedDate))
+    }
+
+    @MainActor @Test
+    func test_syncStatus_error() async throws {
+        let db = try AppDatabase.makeInMemory()
+        try await seedPhoto(canonicalName: "error.dng", in: db)
+        try await writeSyncStatus(.error(reason: "Network timeout"), canonicalName: "error.dng", in: db)
+
+        let vm = SyncStatusViewModel(db: db)
+        vm.observeSyncStatus(for: "error.dng")
+        #expect(vm.syncStatus == .error(reason: "Network timeout"))
+    }
+
+    @MainActor @Test
+    func test_syncStatus_persistence() async throws {
+        // Status written to DB survives ViewModel recreation (simulates app restart).
+        let db = try AppDatabase.makeInMemory()
+        try await seedPhoto(canonicalName: "persist.dng", in: db)
+        try await writeSyncStatus(.syncing(progress: 0.9), canonicalName: "persist.dng", in: db)
+
+        let vm1 = SyncStatusViewModel(db: db)
+        vm1.observeSyncStatus(for: "persist.dng")
+        let firstStatus = vm1.syncStatus
+
+        // Simulate re-creation from the same underlying DB
+        let vm2 = SyncStatusViewModel(db: db)
+        vm2.observeSyncStatus(for: "persist.dng")
+        #expect(vm2.syncStatus == firstStatus)
+        #expect(vm2.syncStatus == .syncing(progress: 0.9))
     }
 }
