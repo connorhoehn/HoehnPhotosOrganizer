@@ -57,4 +57,47 @@ struct CoreEnumTests {
                     "SyncState.\(state.rawValue).label must not be empty")
         }
     }
+
+    // MARK: - ActivityEventKind
+
+    @Test
+    func testActivityEventKindCriticalRawValuesMatchDatabaseColumnValues() {
+        #expect(ActivityEventKind.importBatch.rawValue        == "import_batch")
+        #expect(ActivityEventKind.adjustment.rawValue         == "adjustment")
+        #expect(ActivityEventKind.colorGrade.rawValue         == "color_grade")
+        #expect(ActivityEventKind.printAttempt.rawValue       == "print_attempt")
+        #expect(ActivityEventKind.note.rawValue               == "note")
+        #expect(ActivityEventKind.rollback.rawValue           == "rollback")
+        #expect(ActivityEventKind.metadataEnrichment.rawValue == "metadata_enrichment")
+        #expect(ActivityEventKind.printJob.rawValue           == "print_job")
+        #expect(ActivityEventKind.curveLinearized.rawValue    == "curve_linearized")
+        #expect(ActivityEventKind.versionCreated.rawValue     == "version_created")
+    }
+
+    @Test
+    func testActivityEventKindAllCasesHaveNonEmptyFilterLabels() {
+        for kind in ActivityEventKind.allCases {
+            #expect(!kind.filterLabel.isEmpty,
+                    "ActivityEventKind.\(kind.rawValue).filterLabel must not be empty")
+        }
+    }
+
+    // MARK: - SmartCollectionRule enums
+
+    @Test
+    func testSmartCollectionRuleFieldRawValuesMatchDatabaseColumnValues() {
+        #expect(SmartCollectionRule.Field.curationState.rawValue   == "curation_state")
+        #expect(SmartCollectionRule.Field.processingState.rawValue == "processing_state")
+        #expect(SmartCollectionRule.Field.syncState.rawValue       == "sync_state")
+        #expect(SmartCollectionRule.Field.role.rawValue            == "role")
+        #expect(SmartCollectionRule.Field.driveId.rawValue         == "drive_id")
+    }
+
+    @Test
+    func testSmartCollectionRuleOperatorRawValuesMatchQueryConventions() {
+        #expect(SmartCollectionRule.Operator.equals.rawValue      == "equals")
+        #expect(SmartCollectionRule.Operator.notEquals.rawValue   == "not_equals")
+        #expect(SmartCollectionRule.Operator.isNull.rawValue      == "is_null")
+        #expect(SmartCollectionRule.Operator.isNotNull.rawValue   == "is_not_null")
+    }
 }
