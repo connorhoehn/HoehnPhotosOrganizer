@@ -59,6 +59,10 @@ struct ProxySyncClient: Sendable {
     /// Total number of upload attempts (initial + retries). Default 3.
     private let maxRetries: Int
 
+    /// Base delay in seconds between network-error retries. Doubles each attempt (1s, 2s, …).
+    /// Set to 0 in tests to avoid sleeping.
+    private let baseRetryDelay: TimeInterval
+
     /// Content-Type for all proxy JPEG uploads.
     private let contentType = "image/jpeg"
 
@@ -67,11 +71,13 @@ struct ProxySyncClient: Sendable {
     init(
         s3Client: any S3Uploading,
         urlProvider: any PresignedURLProviding,
-        maxRetries: Int = 3
+        maxRetries: Int = 3,
+        baseRetryDelay: TimeInterval = 1.0
     ) {
         self.s3Client = s3Client
         self.urlProvider = urlProvider
         self.maxRetries = maxRetries
+        self.baseRetryDelay = baseRetryDelay
     }
 
     // MARK: Public API
@@ -145,28 +151,47 @@ struct ProxySyncClient: Sendable {
                     onProgress?(1.0)
                     return
                 } else if statusCode == 403 {
-                    // Presigned URL expired — invalidate cache and retry with fresh URL
+                    // Presigned URL expired — invalidate cache and retry with fresh URL immediately
                     await urlProvider.invalidatePutURL(for: key)
                     lastError = SyncError.presignedURLExpired
-                    // Continue loop for retry
+                    // Continue loop for retry (no backoff — URL refresh is instant)
                 } else {
                     // Non-retryable HTTP error
                     throw SyncError.uploadFailed(reason: "HTTP \(statusCode)")
                 }
 
-            } catch let urlError as URLError where urlError.code == .timedOut {
+            } catch let urlError as URLError where Self.isRetryableURLError(urlError) {
                 lastError = SyncError.networkTimeout
-                // Continue loop for retry
+                if baseRetryDelay > 0 {
+                    let delay = baseRetryDelay * pow(2.0, Double(attemptCount - 1))
+                    try await Task.sleep(for: .seconds(delay))
+                }
             } catch let syncError as SyncError {
                 // Propagate non-retryable SyncErrors immediately
                 throw syncError
             } catch {
-                // Unknown network error — treat as non-retryable
+                // Unknown error — treat as non-retryable
                 throw SyncError.uploadFailed(reason: error.localizedDescription)
             }
         }
 
         // All attempts exhausted
         throw SyncError.maxRetriesExceeded(retryCount: attemptCount)
+    }
+
+    /// Returns true for URLErrors that are safe to retry: transient connectivity losses
+    /// and timeouts that may clear up within a few seconds.
+    private static func isRetryableURLError(_ error: URLError) -> Bool {
+        switch error.code {
+        case .timedOut,
+             .networkConnectionLost,
+             .notConnectedToInternet,
+             .cannotConnectToHost,
+             .cannotFindHost,
+             .dnsLookupFailed:
+            return true
+        default:
+            return false
+        }
     }
 }

@@ -17,7 +17,8 @@ final class ProxySyncTests: SyncTestCase {
         super.setUp()
         sut = ProxySyncClient(
             s3Client: mockS3,
-            urlProvider: mockURLProvider
+            urlProvider: mockURLProvider,
+            baseRetryDelay: 0  // no sleep in unit tests
         )
     }
 
@@ -129,6 +130,44 @@ final class ProxySyncTests: SyncTestCase {
         XCTAssertFalse(progressValues.isEmpty, "Progress callback should have been called at least once")
         XCTAssertTrue(progressValues.allSatisfy { $0 >= 0.0 && $0 <= 1.0 },
                       "All progress values must be in [0.0, 1.0]")
+    }
+
+    // MARK: - Transient network error retry
+
+    /// networkConnectionLost is a transient error — client should retry and succeed on the second attempt.
+    func test_networkConnectionLostIsRetried() async throws {
+        let asset = MockPhotoAsset()
+        mockS3.putResponseSequence = [
+            .failure(statusCode: 0, error: URLError(.networkConnectionLost)),
+            .success(statusCode: 200)
+        ]
+
+        try await sut.uploadProxy(
+            data: asset.proxyData,
+            canonicalId: asset.canonicalId,
+            bucketName: "test-bucket"
+        )
+
+        XCTAssertEqual(mockS3.putRequests.count, 2, "networkConnectionLost must trigger a retry")
+    }
+
+    /// Exponential backoff path: baseRetryDelay=0 exercises the retry loop without sleeping.
+    /// Verifies that a second transient error is still retried (not given up on after the first).
+    func test_multipleTransientErrorsRetryUntilSuccess() async throws {
+        let asset = MockPhotoAsset()
+        mockS3.putResponseSequence = [
+            .failure(statusCode: 0, error: URLError(.notConnectedToInternet)),
+            .failure(statusCode: 0, error: URLError(.cannotConnectToHost)),
+            .success(statusCode: 200)
+        ]
+
+        try await sut.uploadProxy(
+            data: asset.proxyData,
+            canonicalId: asset.canonicalId,
+            bucketName: "test-bucket"
+        )
+
+        XCTAssertEqual(mockS3.putRequests.count, 3, "All three attempts should have been made")
     }
 
     // MARK: - SyncErrors
