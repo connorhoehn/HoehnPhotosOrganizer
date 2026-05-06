@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import HoehnPhotosCore
 
 struct SidebarRail: View {
     @Binding var selectedSection: AppSection
@@ -12,10 +13,13 @@ struct SidebarRail: View {
     var onDropToPrintLab: (([String]) -> Void)? = nil
     @ObservedObject var peerSync: MacPeerSyncAdvertiser
 
+    @EnvironmentObject private var auth: AuthEnvironment
+
     @State private var showSmartAlbumsPopover: Bool = false
     @State private var workflowDropTargeted: Bool = false
     @State private var printLabDropTargeted: Bool = false
     @State private var showSectionHelp: Bool = false
+    @State private var showAccountPopover: Bool = false
 
     private let sectionGuide: [(String, String, String)] = [
         ("Library",   "photo.on.rectangle",     "Browse, filter, and curate your photo collection"),
@@ -50,7 +54,7 @@ struct SidebarRail: View {
                 }
 
                 VStack(spacing: vGap * 0.6) {
-                    ForEach(navSections) { section in
+                    ForEach(Array(navSections.enumerated()), id: \.element) { index, section in
                         let isDropTarget = (section == .jobs && workflowDropTargeted) ||
                                           (section == .printLab && printLabDropTargeted)
                         Button { selectedSection = section } label: {
@@ -76,6 +80,9 @@ struct SidebarRail: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(section.title)
+                        .accessibilityAddTraits(selectedSection == section ? .isSelected : [])
+                        .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
                         .help(section.sidebarHelpText)
                         .onDrop(of: [.plainText], isTargeted: section == .jobs ? $workflowDropTargeted : section == .printLab ? $printLabDropTargeted : .constant(false)) { providers in
                             guard section == .jobs || section == .printLab else { return false }
@@ -137,6 +144,10 @@ struct SidebarRail: View {
                     .frame(width: 280)
                 }
 
+                if auth.isAuthenticated {
+                    accountButton
+                }
+
                 Button { onSettings() } label: {
                     VStack(spacing: 5) {
                         Image(systemName: "gearshape")
@@ -169,6 +180,59 @@ struct SidebarRail: View {
         .padding(.vertical, 18)
         .frame(minWidth: itemSize + 16, maxWidth: itemSize + 16, maxHeight: .infinity)
         .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    // MARK: - Account
+
+    private var accountButton: some View {
+        Button {
+            showAccountPopover.toggle()
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.system(size: iconPt + 2, weight: .semibold))
+                Text("Account")
+                    .font(.system(size: labelPt, weight: .medium))
+            }
+            .frame(width: itemSize, height: itemSize)
+            .foregroundStyle(.primary)
+        }
+        .buttonStyle(.plain)
+        .help("Signed in as \(auth.username ?? "user")")
+        .popover(isPresented: $showAccountPopover, arrowEdge: .trailing) {
+            accountPopoverContent
+        }
+    }
+
+    private var accountPopoverContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Signed in").font(.caption).foregroundStyle(.secondary)
+                    Text(auth.username ?? "—").font(.subheadline.weight(.medium))
+                }
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                showAccountPopover = false
+                auth.signOut()
+            } label: {
+                HStack {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                    Text("Sign out")
+                    Spacer()
+                }
+                .padding(.vertical, 4)
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(14)
+        .frame(width: 240)
     }
 
     // MARK: - Sync Indicator
