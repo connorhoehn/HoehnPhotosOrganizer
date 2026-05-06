@@ -200,6 +200,22 @@ actor PhotoRepository {
         }
     }
 
+    /// Returns canonical names of all assets already past the initial `.indexed` state.
+    ///
+    /// Used by IngestionActor's resume skip check (ING-4): pre-fetched once before the
+    /// file loop so each file's skip check is O(1) Set lookup rather than a per-file
+    /// async DB read — critical at 100k+ file scales.
+    func fetchAlreadyIndexedNames() async throws -> Set<String> {
+        try await db.dbPool.read { db in
+            let names = try String.fetchAll(
+                db,
+                sql: "SELECT canonical_name FROM photo_assets WHERE processing_state != ?",
+                arguments: [ProcessingState.indexed.rawValue]
+            )
+            return Set(names)
+        }
+    }
+
     // MARK: - Curation state mutations
 
     /// Targeted curation-state update for a single photo.

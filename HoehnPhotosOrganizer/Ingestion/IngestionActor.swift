@@ -18,9 +18,9 @@ struct IngestionProgress: Sendable {
 /// machine.
 ///
 /// Resume safety (ING-4): files already past the initial `.indexed` state are skipped.
-/// The skip check MUST use `photoRepo.fetchByCanonicalName(canonicalName)` — the
-/// camera-assigned filename — and NOT `fetchById`. `fetchById` takes an internal UUID;
-/// passing a canonical name to it always returns nil, silently breaking resume logic.
+/// Before the file loop, `photoRepo.fetchAlreadyIndexedNames()` pre-fetches the full
+/// Set<String> of already-processed canonical names so each skip check is O(1) rather
+/// than an async DB read per file.
 actor IngestionActor {
     private let photoRepo: PhotoRepository
     private let driveRepo: DriveRepository
@@ -119,6 +119,11 @@ actor IngestionActor {
         var failed = 0
         var pendingBatch: [PhotoAsset] = []
 
+        // ING-4: Pre-fetch all canonical names already past indexed state once, before
+        // the loop, so the per-file resume check is O(1) Set lookup instead of an async
+        // DB read per file — avoids 100k round-trips at large import scale.
+        let alreadyIndexed = (try? await photoRepo.fetchAlreadyIndexedNames()) ?? []
+
         /// Flush the current batch to GRDB in one transaction.
         func flushBatch() async {
             guard !pendingBatch.isEmpty else { return }
@@ -147,12 +152,8 @@ actor IngestionActor {
                 currentFile: canonicalName
             ))
 
-            // ING-4: Resume skip — use fetchByCanonicalName, NOT fetchById.
-            // fetchById takes a UUID; passing canonicalName would always return nil,
-            // silently breaking resume.
-            if let existing = try? await photoRepo.fetchByCanonicalName(canonicalName),
-               existing.processingState != ProcessingState.indexed.rawValue {
-                // Already processed past initial indexed state — skip.
+            // ING-4: Resume skip — O(1) Set lookup using names pre-fetched before loop.
+            if alreadyIndexed.contains(canonicalName) {
                 processed += 1
                 continue
             }

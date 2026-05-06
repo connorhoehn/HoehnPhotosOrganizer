@@ -101,6 +101,71 @@ struct IngestionActorTests {
         #expect(validRecord != nil,   "Valid file should have a DB record")
     }
 
+    // MARK: - ING-4: Pre-fetch Set skips already-processed files at O(1)
+
+    @Test
+    func testPreFetchSetSkipsAlreadyProcessedFiles() async throws {
+        // ING-4 (optimised path): fetchAlreadyIndexedNames() pre-fetches a Set<String>
+        // before the file loop. Files whose canonical names are in the set are skipped
+        // without per-file DB reads.
+        let db = try AppDatabase.makeInMemory()
+        let photoRepo = PhotoRepository(db: db)
+        let driveRepo = DriveRepository(db: db)
+
+        // Pre-seed two files past indexed state
+        for name in ["SKIP_A.dng", "SKIP_B.dng"] {
+            var asset = PhotoAsset.new(
+                canonicalName: name,
+                role: .original,
+                filePath: "/\(name)",
+                fileSize: 1_000_000
+            )
+            asset.processingState = ProcessingState.proxyPending.rawValue
+            try await photoRepo.upsert(asset)
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-prefetch-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        // Place both seeded files + one brand-new file on the "drive"
+        for name in ["SKIP_A.dng", "SKIP_B.dng", "NEW.dng"] {
+            try Data().write(to: tempDir.appendingPathComponent(name))
+        }
+
+        let drive = DriveInfo(
+            volumeLabel: "PrefetchTestDrive",
+            mountPoint: tempDir,
+            totalBytes: 100_000_000,
+            freeBytes: 50_000_000,
+            volumeUUID: UUID().uuidString
+        )
+
+        let actor = IngestionActor(photoRepo: photoRepo, driveRepo: driveRepo)
+        var finalEvent: IngestionProgress?
+        for await progress in actor.startIngestion(drive: drive) {
+            finalEvent = progress
+        }
+
+        // Skipped files must not count as failures
+        #expect(finalEvent?.failedFiles == 0, "Skipped files must not count as failures")
+
+        // Already-processed files must retain their state (not be reset to indexed)
+        let skipA = try await photoRepo.fetchByCanonicalName("SKIP_A.dng")
+        let skipB = try await photoRepo.fetchByCanonicalName("SKIP_B.dng")
+        #expect(skipA?.processingState == ProcessingState.proxyPending.rawValue,
+                "SKIP_A must remain in proxyPending — pre-fetch Set skipped re-processing it")
+        #expect(skipB?.processingState == ProcessingState.proxyPending.rawValue,
+                "SKIP_B must remain in proxyPending — pre-fetch Set skipped re-processing it")
+
+        // The new file must have been indexed
+        let newFile = try await photoRepo.fetchByCanonicalName("NEW.dng")
+        #expect(newFile != nil, "NEW.dng must be indexed on first scan")
+        #expect(newFile?.processingState == ProcessingState.proxyPending.rawValue,
+                "NEW.dng must advance to proxyPending after ingestion")
+    }
+
     // MARK: - Batch flush: multiple files land in DB via bulkUpsert path
 
     @Test
