@@ -153,4 +153,42 @@ struct CoreEnumTests {
         #expect(TriageJobSource.manual.rawValue      == "manual")
         #expect(TriageJobSource.split.rawValue       == "split")
     }
+
+    // MARK: - PipelinePurpose
+
+    @Test
+    func testPipelinePurposeRawValuesMatchDatabaseColumnValues() {
+        #expect(PipelinePurpose.printPrep.rawValue      == "print_prep")
+        #expect(PipelinePurpose.tracingPrep.rawValue    == "tracing_prep")
+        #expect(PipelinePurpose.engravingPrep.rawValue  == "engraving_prep")
+        #expect(PipelinePurpose.scanCleanup.rawValue    == "scan_cleanup")
+        #expect(PipelinePurpose.socialExport.rawValue   == "social_export")
+    }
+
+    @Test
+    func testPipelinePurposeAllCasesHaveNonEmptyDisplayLabels() {
+        for purpose in PipelinePurpose.allCases {
+            #expect(!purpose.displayLabel.isEmpty,
+                    "PipelinePurpose.\(purpose.rawValue).displayLabel must not be empty")
+        }
+    }
+
+    // MARK: - PipelineRunStatus + PipelineToolStatus
+
+    @Test
+    func testPipelineRunStatusRawValuesMatchDatabaseColumnValues() {
+        #expect(PipelineRunStatus.running.rawValue    == "running")
+        #expect(PipelineRunStatus.succeeded.rawValue  == "succeeded")
+        #expect(PipelineRunStatus.failed.rawValue     == "failed")
+        #expect(PipelineRunStatus.cancelled.rawValue  == "cancelled")
+    }
+
+    @Test
+    func testPipelineToolStatusRawValuesMatchDatabaseColumnValues() {
+        #expect(PipelineToolStatus.started.rawValue    == "started")
+        #expect(PipelineToolStatus.succeeded.rawValue  == "succeeded")
+        #expect(PipelineToolStatus.failed.rawValue     == "failed")
+        #expect(PipelineToolStatus.skipped.rawValue    == "skipped")
+        #expect(PipelineToolStatus.fallback.rawValue   == "fallback")
+    }
 }
