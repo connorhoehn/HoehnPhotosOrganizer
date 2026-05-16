@@ -491,6 +491,7 @@ struct PrintLabLeftPanel: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(saveAsName.isEmpty)
+                .help(saveAsName.isEmpty ? "Enter a name for the template" : "Save the current layout as a reusable template")
             }
         }
         .padding(24)

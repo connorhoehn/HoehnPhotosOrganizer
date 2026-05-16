@@ -191,6 +191,7 @@ struct CurveBuilderView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .disabled(viewModel.builderTargetImage == nil)
+            .help(viewModel.builderTargetImage == nil ? "Load a target image to sample patches from" : "Sample patch values from the target image")
 
             Button {
                 // TODO: generate curve
@@ -201,6 +202,7 @@ struct CurveBuilderView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .disabled(viewModel.builderSteps.isEmpty)
+            .help(viewModel.builderSteps.isEmpty ? "Add patch steps first to generate a curve" : "Build a tone curve from the collected patch steps")
 
             Spacer()
 

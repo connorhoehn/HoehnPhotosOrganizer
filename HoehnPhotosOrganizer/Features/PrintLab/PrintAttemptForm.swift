@@ -65,6 +65,7 @@ struct PrintAttemptForm: View {
                         savePrintAttempt()
                     }
                     .disabled(paper.isEmpty)
+                    .help(paper.isEmpty ? "Enter the paper used for this print" : "Save this print attempt to the job thread")
                 }
             }
         }

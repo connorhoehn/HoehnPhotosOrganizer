@@ -17,13 +17,20 @@ actor ProxyGenerationActor {
     private let photoRepo: PhotoRepository
     private let proxyRepo: ProxyAssetRepository
     private let embeddingRepo: EmbeddingRepository?
+    private let appDatabase: AppDatabase?
     private let clipService = MobileCLIPService()
     private let orientationClassifier = OrientationClassificationService()
 
-    init(photoRepo: PhotoRepository, proxyRepo: ProxyAssetRepository, embeddingRepo: EmbeddingRepository? = nil) {
+    init(
+        photoRepo: PhotoRepository,
+        proxyRepo: ProxyAssetRepository,
+        embeddingRepo: EmbeddingRepository? = nil,
+        appDatabase: AppDatabase? = nil
+    ) {
         self.photoRepo = photoRepo
         self.proxyRepo = proxyRepo
         self.embeddingRepo = embeddingRepo
+        self.appDatabase = appDatabase
     }
 
     // MARK: - Public API
@@ -67,6 +74,15 @@ actor ProxyGenerationActor {
         var processedIds: Set<String> = []
 
         let proxiesDir = Self.proxiesDirectory()
+
+        // All per-photo writes funnel through this batcher so 1000 photos cost ~10 transactions
+        // instead of ~6000. nil when called without an AppDatabase (legacy frame-extraction
+        // callers) — falls back to per-write paths via the repos.
+        let batcher: PhotoProcessingBatcher? = appDatabase.map { PhotoProcessingBatcher(db: $0) }
+        defer {
+            // Drain on any control-flow exit — best-effort because we can't `try await` in defer.
+            if let b = batcher { Task { try? await b.flush() } }
+        }
 
         while true {
             let batch = (try? await photoRepo.fetchByProcessingState(.proxyPending, limit: Self.pageBatchSize)) ?? []
@@ -122,52 +138,81 @@ actor ProxyGenerationActor {
                     thumbnailByteSize: thumbnailByteSize,
                     createdAt: ISO8601DateFormatter().string(from: .now)
                 )
-                try await proxyRepo.upsert(proxyAsset)
-                try await photoRepo.updateProcessingState(id: asset.id, state: .proxyReady)
-
-                // Stamp proxy path and source drive fields on the PhotoAsset
-                try await photoRepo.stampProxyFields(
-                    id: asset.id,
-                    proxyPath: outURL.path,
-                    sourceDriveUUID: driveUUID,
-                    sourceDrivePath: asset.filePath
-                )
+                if let batcher {
+                    try await batcher.appendProxyAsset(proxyAsset)
+                    try await batcher.appendProcessingState(id: asset.id, state: .proxyReady)
+                    try await batcher.appendProxyFields(
+                        id: asset.id,
+                        proxyPath: outURL.path,
+                        sourceDriveUUID: driveUUID,
+                        sourceDrivePath: asset.filePath
+                    )
+                } else {
+                    try await proxyRepo.upsert(proxyAsset)
+                    try await photoRepo.updateProcessingState(id: asset.id, state: .proxyReady)
+                    try await photoRepo.stampProxyFields(
+                        id: asset.id,
+                        proxyPath: outURL.path,
+                        sourceDriveUUID: driveUUID,
+                        sourceDrivePath: asset.filePath
+                    )
+                }
 
                 // MobileCLIP image embedding — best-effort, failure does not block import
                 if let repo = embeddingRepo {
                     do {
                         let vec = try await clipService.encodeImage(cgImage)
-                        try await repo.storeEmbedding(photoAssetId: asset.id, embedding: clipService.normalise(vec))
+                        let normalised = clipService.normalise(vec)
+                        if let batcher {
+                            try await batcher.appendClipEmbedding(photoAssetId: asset.id, embedding: normalised)
+                        } else {
+                            try await repo.storeEmbedding(photoAssetId: asset.id, embedding: normalised)
+                        }
                         print("[MobileCLIP] ✓ embedded \(asset.id)")
                     } catch {
                         print("[MobileCLIP] ✗ \(asset.id): \(error.localizedDescription)")
                     }
                 }
 
-                // Auto-orient: detect and correct rotation for film strip frames
-                // so they appear upright in the library immediately after import.
-                let orientResult = await orientationClassifier.classify(proxyURL: outURL)
+                // Auto-orient: classify against the in-memory cgImage we already decoded
+                // (skips the extra disk read the old proxyURL: variant did).
+                let orientResult = await orientationClassifier.classify(cgImage: cgImage)
                 if orientResult.rotationDegrees != 0 {
                     Self.applyRotationToFile(orientResult.rotationDegrees, url: outURL)
                     Self.applyRotationToFile(orientResult.rotationDegrees, url: thumbURL)
-                    // Touch updatedAt so the grid cell reloads the now-rotated proxy
-                    try? await photoRepo.touchUpdatedAt(id: asset.id)
+                    if let batcher {
+                        try await batcher.appendTouchUpdatedAt(id: asset.id)
+                    } else {
+                        try? await photoRepo.touchUpdatedAt(id: asset.id)
+                    }
                     print("[AutoOrient] \(asset.canonicalName): \(orientResult.rotationDegrees)°CW via \(orientResult.method)")
                 }
 
                 completed += 1
             } catch {
-                try? await photoRepo.updateProcessingState(
-                    id: asset.id,
-                    state: .proxyPending,
-                    errorMessage: error.localizedDescription
-                )
+                if let batcher {
+                    try? await batcher.appendProcessingState(
+                        id: asset.id,
+                        state: .proxyPending,
+                        errorMessage: error.localizedDescription
+                    )
+                } else {
+                    try? await photoRepo.updateProcessingState(
+                        id: asset.id,
+                        state: .proxyPending,
+                        errorMessage: error.localizedDescription
+                    )
+                }
                 failed += 1
             }
 
             continuation.yield(ProxyGenerationProgress(total: total, completed: completed, failed: failed))
         }
         } // end while true
+
+        // Commit the trailing batch before returning so the caller's "isGeneratingProxies = false"
+        // doesn't beat the last writes to the DB.
+        if let batcher { try? await batcher.flush() }
     }
 
     // MARK: - Thumbnail generation (PRX-10)
@@ -349,15 +394,22 @@ actor ProxyGenerationActor {
 
     // MARK: - CIContext factory
 
-    /// Returns a CIContext that renders to CPU memory, avoiding GPU IOSurface allocations.
-    /// Using software rendering prevents the IOSurface failures that occur when multiple
-    /// large files are decoded concurrently during import.
-    private static func makeCIContext() -> CIContext {
-        CIContext(options: [
-            .useSoftwareRenderer: true,
-            .outputColorSpace: CGColorSpaceCreateDeviceRGB() as Any
-        ])
-    }
+    /// Shared CIContext used for every proxy decode in this actor instance.
+    ///
+    /// Previously this was constructed once **per image** (called inside
+    /// `generateProxy`), which on a 100K-photo import meant 100K CIContext
+    /// allocations — each holds non-trivial internal state (render queues, color
+    /// space caches). One context can safely serve every render here because
+    /// CIContext is thread-safe and the work is CPU-only (no GPU IOSurface).
+    ///
+    /// Rendering to CPU memory avoids the IOSurface failures that occur when
+    /// multiple large files are decoded concurrently during import.
+    private static let sharedCIContext: CIContext = CIContext(options: [
+        .useSoftwareRenderer: true,
+        .outputColorSpace: CGColorSpaceCreateDeviceRGB() as Any
+    ])
+
+    private static func makeCIContext() -> CIContext { sharedCIContext }
 
     // MARK: - Scaling helpers
 

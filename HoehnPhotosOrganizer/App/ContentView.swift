@@ -175,6 +175,13 @@ private struct LibraryRootView: View {
             viewModel.outboxProcessor = outboxProcessor
             viewModel.startObserving()
             outboxProcessor?.start()
+
+            // Launch-time face chip GC + backfill. Cheap if nothing to do; surfaces
+            // progress via JobsView's background-activity banner when work is needed.
+            // Fire-and-forget so it doesn't delay first paint.
+            Task.detached(priority: .utility) { [weak viewModel] in
+                await viewModel?.runFaceChipMaintenance()
+            }
         }
         .onDisappear {
             viewModel.stopObserving()

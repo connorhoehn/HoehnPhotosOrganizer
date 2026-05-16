@@ -48,12 +48,17 @@ actor SyncStateRepository {
         }
     }
 
+    /// Photos whose `updated_at` is newer than `timestamp`, restricted to library-committed.
+    /// Staged photos (inside an open triage job) **must not** sync to cloud — if a user
+    /// cancels the job, we'd leave orphan records in DynamoDB / S3 with no way to clean
+    /// up. Sync runs only on the user's intentional library, never on in-flight imports.
     func getPhotosModifiedSince(_ timestamp: Int64) async throws -> [PhotoAsset] {
         try await db.dbPool.read { db in
             let date = Date(timeIntervalSince1970: TimeInterval(timestamp))
             let iso = ISO8601DateFormatter().string(from: date)
             return try PhotoAsset
                 .filter(Column("updated_at") > iso)
+                .filter(Column("import_status") == "library")
                 .fetchAll(db)
         }
     }

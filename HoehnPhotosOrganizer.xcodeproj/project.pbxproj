@@ -22,10 +22,10 @@
 		D2D484B12F9FB987001458AA /* clip_vocab.json in Resources */ = {isa = PBXBuildFile; fileRef = D2D484A22F9FB987001458AA /* clip_vocab.json */; };
 		D2D484B22F9FB987001458AA /* clip_bpe_merges.txt in Resources */ = {isa = PBXBuildFile; fileRef = D2D484A12F9FB987001458AA /* clip_bpe_merges.txt */; };
 		D2E89EB52F78992D00EF292D /* HoehnPhotosCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D2E89EAA2F78992D00EF292D /* HoehnPhotosCore.framework */; };
-		D2E89EFE2F78999000EF292D /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D2E89EFF2F78999000EF292D /* GRDB */; };
 		D2E89EC82F78992D00EF292D /* HoehnPhotosCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = D2E89EAA2F78992D00EF292D /* HoehnPhotosCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		D2E89ECC2F78999000EF292D /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D2E89ECB2F78999000EF292D /* GRDB */; };
 		D2E89ECE2F78999000EF292D /* GRDBQuery in Frameworks */ = {isa = PBXBuildFile; productRef = D2E89ECD2F78999000EF292D /* GRDBQuery */; };
+		D2E89EFE2F78999000EF292D /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D2E89EFF2F78999000EF292D /* GRDB */; };
 		D2E89F112F789A6300EF292D /* HoehnPhotosCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D2E89EAA2F78992D00EF292D /* HoehnPhotosCore.framework */; };
 		D2E89F122F789A6300EF292D /* HoehnPhotosCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = D2E89EAA2F78992D00EF292D /* HoehnPhotosCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -1513,15 +1513,15 @@
 			package = AA000001000000000000001A /* XCRemoteSwiftPackageReference "GRDB" */;
 			productName = GRDB;
 		};
-		D2E89EFF2F78999000EF292D /* GRDB */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = AA000001000000000000001A /* XCRemoteSwiftPackageReference "GRDB" */;
-			productName = GRDB;
-		};
 		D2E89ECD2F78999000EF292D /* GRDBQuery */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = AA000001000000000000002A /* XCRemoteSwiftPackageReference "GRDBQuery" */;
 			productName = GRDBQuery;
+		};
+		D2E89EFF2F78999000EF292D /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000001000000000000001A /* XCRemoteSwiftPackageReference "GRDB" */;
+			productName = GRDB;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

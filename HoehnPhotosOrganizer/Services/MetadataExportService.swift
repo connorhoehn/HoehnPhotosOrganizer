@@ -216,8 +216,18 @@ final class MetadataExportService {
 
     private func parseUserMetadata(from photo: PhotoAsset) -> MetadataExportInfo {
         guard let json = photo.userMetadataJson,
-              let data = json.data(using: .utf8),
-              let extraction = try? JSONDecoder().decode(MetadataExtractionResult.self, from: data) else {
+              let data = json.data(using: .utf8) else {
+            return MetadataExportInfo(location: nil, people: [], occasion: nil, mood: nil, keywords: [])
+        }
+        let extraction: MetadataExtractionResult
+        do {
+            // Why: a `try?` here silently produced an empty export, making it
+            // look like the photo had no user metadata when in reality the
+            // stored JSON had drifted from MetadataExtractionResult's schema.
+            // Log the photo id + DecodingError so the bad row is findable.
+            extraction = try JSONDecoder().decode(MetadataExtractionResult.self, from: data)
+        } catch {
+            print("[MetadataExport] Decode failed for photo \(photo.id): \(error)")
             return MetadataExportInfo(location: nil, people: [], occasion: nil, mood: nil, keywords: [])
         }
         return MetadataExportInfo(
@@ -231,8 +241,21 @@ final class MetadataExportService {
 
     private func parseMetadataEdits(from photo: PhotoAsset) -> [MetadataEditRecord] {
         guard let json = photo.metadataEdits,
-              let data = json.data(using: .utf8),
-              let rawEdits = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+              let data = json.data(using: .utf8) else {
+            return []
+        }
+        let rawEdits: [[String: Any]]
+        do {
+            // Why: a `try?` here silently swallowed JSON-shape drift, returning
+            // an empty edit history for photos whose stored edits payload had
+            // become malformed. Log the photo id + error so bad rows surface.
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                print("[MetadataExport] metadataEdits for photo \(photo.id) is not an array of dicts")
+                return []
+            }
+            rawEdits = parsed
+        } catch {
+            print("[MetadataExport] metadataEdits decode failed for photo \(photo.id): \(error)")
             return []
         }
         return rawEdits.compactMap { dict -> MetadataEditRecord? in
@@ -249,8 +272,21 @@ final class MetadataExportService {
 
     private func parseExif(from photo: PhotoAsset) -> [String: String]? {
         guard let json = photo.rawExifJson,
-              let data = json.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+              let data = json.data(using: .utf8) else {
+            return nil
+        }
+        let dict: [String: Any]
+        do {
+            // Why: a `try?` here masked legitimate EXIF JSON corruption — the
+            // sidecar would silently omit EXIF for an affected photo. Log the
+            // photo id + error so we can investigate the offending row.
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                print("[MetadataExport] rawExifJson for photo \(photo.id) is not a JSON object")
+                return nil
+            }
+            dict = parsed
+        } catch {
+            print("[MetadataExport] rawExifJson decode failed for photo \(photo.id): \(error)")
             return nil
         }
         // Convert all values to String for a uniform, portable representation.

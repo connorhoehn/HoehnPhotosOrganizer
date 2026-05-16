@@ -3,70 +3,82 @@ import ImageIO
 
 // MARK: - FaceCropCache
 
-/// Global cache for cropped face thumbnails.
-/// Avoids re-reading proxy JPEGs from disk and re-cropping on every scroll.
-/// Also limits concurrency to avoid saturating the I/O queue when hundreds
-/// of cells become visible at once.
+/// In-memory cache layered over `FaceChipStore`'s on-disk JPEGs.
+///
+/// Three-tier lookup on `crop(...)`:
+///   1. NSCache hit → return immediately.
+///   2. On-disk chip JPEG exists (the common case for any face viewed before) →
+///      load it, cache it, return.
+///   3. No chip yet → generate one via `FaceChipStore` from the highest-res source
+///      available (original > proxy), persist it, cache it, return.
+///
+/// The cache stores fully-decoded NSImages keyed by `face_embedding.id`, with a
+/// small entry cap to keep resident memory bounded for huge people galleries.
 final class FaceCropCache: Sendable {
 
     static let shared = FaceCropCache()
 
-    /// NSCache is thread-safe. Stores cropped NSImage keyed by face embedding ID.
+    /// Thread-safe by contract from Foundation.
     private nonisolated(unsafe) let cache = NSCache<NSString, NSImage>()
 
-    /// Limits concurrent disk reads + crop operations.
+    /// Caps concurrent disk reads + chip-generation work. Six is enough to keep a
+    /// gallery scroll smooth without thrashing the I/O queue.
     private let semaphore = DispatchSemaphore(value: 6)
 
     private init() {
-        // Allow ~200 face crops in memory (~80×80 JPEG ≈ 25 KB each → ~5 MB)
-        cache.countLimit = 500
+        // Each cached crop is ~512 px max edge → ~200–400 KB resident as NSImage.
+        // 200 entries ≈ 40–80 MB worst case, which is fine on any Mac that runs the app.
+        cache.countLimit = 200
     }
 
-    /// Returns a cached crop or loads it from disk, crops, caches, and returns it.
-    /// Runs the heavy work on a detached task with concurrency throttling.
-    func crop(id: String, proxyURL: URL, bbox: CGRect) async -> NSImage? {
-        let key = id as NSString
+    /// Returns a sharp face crop for the given face id.
+    ///
+    /// - Parameters:
+    ///   - faceId: `face_embeddings.id` — used as the chip filename.
+    ///   - sourceURL: the photo's original file (highest resolution). Pass nil if not
+    ///     available; the proxy will be used instead.
+    ///   - proxyURL: the photo's 1600 px JPEG proxy. Always required as the fallback.
+    ///   - bbox: Vision-style normalized bounding box (origin bottom-left, 0…1).
+    func crop(faceId: String, sourceURL: URL?, proxyURL: URL, bbox: CGRect) async -> NSImage? {
+        let key = faceId as NSString
 
-        // Fast path: already cached
-        if let cached = cache.object(forKey: key) {
-            return cached
-        }
+        if let cached = cache.object(forKey: key) { return cached }
 
-        // Throttled load
-        let img = await Task.detached(priority: .utility) { [semaphore] in
+        // Explicit `() -> NSImage?` so the compiler doesn't infer non-optional
+        // from the happy paths and reject `return nil` on the miss path.
+        let img: NSImage? = await Task.detached(priority: .utility) { [semaphore] () -> NSImage? in
             semaphore.wait()
             defer { semaphore.signal() }
 
-            // Downsampled read — we only need a small face crop, so request a
-            // thumbnail from ImageIO at a reasonable max dimension instead of
-            // decoding the full proxy (which can be 1600px+).
-            let thumbOpts: [CFString: Any] = [
-                kCGImageSourceShouldCache: false,
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceThumbnailMaxPixelSize: 400,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-            ]
-
-            guard let src = CGImageSourceCreateWithURL(proxyURL as CFURL, thumbOpts as CFDictionary),
-                  let cgImage = CGImageSourceCreateThumbnailAtIndex(src, 0, thumbOpts as CFDictionary),
-                  let cropped = FaceEmbeddingService.cropFace(from: cgImage, bbox: bbox) else {
-                return nil as NSImage?
+            // Tier 2: chip exists on disk — just load it.
+            let chipURL = FaceChipStore.chipURL(faceId: faceId)
+            if FaceChipStore.chipExists(faceId: faceId) {
+                if let img = NSImage(contentsOf: chipURL) { return img }
+                // Stale/empty file — fall through to regeneration.
             }
-            return NSImage(cgImage: cropped, size: NSSize(width: cropped.width, height: cropped.height))
+
+            // Tier 3: generate, persist, and return. Prefers source → proxy.
+            guard let cg = FaceChipStore.generateChip(
+                faceId: faceId,
+                sourceURL: sourceURL,
+                proxyURL: proxyURL,
+                bbox: bbox
+            ) else { return nil }
+            return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
         }.value
 
-        if let img {
-            cache.setObject(img, forKey: key)
-        }
+        if let img { cache.setObject(img, forKey: key) }
         return img
     }
 
-    /// Evict a specific entry (e.g. after re-indexing).
-    func evict(id: String) {
-        cache.removeObject(forKey: id as NSString)
+    /// Evict a specific entry — call after a face is re-indexed (new id) or its chip
+    /// is regenerated. Does not delete the on-disk chip; pair with
+    /// `FaceChipStore.deleteChips` if you also want the JPEG gone.
+    func evict(faceId: String) {
+        cache.removeObject(forKey: faceId as NSString)
     }
 
-    /// Clear the entire cache (e.g. on memory warning or re-index).
+    /// Drop all in-memory entries. The on-disk store is unaffected.
     func evictAll() {
         cache.removeAllObjects()
     }

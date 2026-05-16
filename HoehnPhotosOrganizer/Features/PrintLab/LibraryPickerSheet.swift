@@ -84,6 +84,7 @@ struct LibraryPickerSheet: View {
                         dismiss()
                     }
                     .disabled(selectedIDs.isEmpty)
+                    .help(selectedIDs.isEmpty ? "Select one or more photos to add" : "Add the selected photos to the canvas")
                 }
             }
         }

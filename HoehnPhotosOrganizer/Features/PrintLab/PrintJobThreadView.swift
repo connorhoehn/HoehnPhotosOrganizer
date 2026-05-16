@@ -480,6 +480,7 @@ struct PrintJobThreadView: View {
             }
             .buttonStyle(.plain)
             .disabled(newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .help(newComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Type a comment to send" : "Post this comment to the print job thread")
         }
         .padding(12)
         .background(

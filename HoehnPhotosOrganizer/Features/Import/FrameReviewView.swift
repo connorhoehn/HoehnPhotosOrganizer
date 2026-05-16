@@ -365,7 +365,7 @@ struct FrameReviewView: View {
             // Generate proxies so thumbnails appear immediately in the library.
             let photoRepo = PhotoRepository(db: db)
             let proxyRepo = ProxyAssetRepository(db: db)
-            let proxyActor = ProxyGenerationActor(photoRepo: photoRepo, proxyRepo: proxyRepo)
+            let proxyActor = ProxyGenerationActor(photoRepo: photoRepo, proxyRepo: proxyRepo, appDatabase: db)
             for await _ in proxyActor.processLocalQueue() {}
 
             // Background face indexing for the newly imported frames.

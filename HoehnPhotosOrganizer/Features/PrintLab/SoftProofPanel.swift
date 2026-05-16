@@ -396,6 +396,7 @@ struct SoftProofPanel: View {
                 dismiss()
             }
             .disabled(vm.selectedProfile == nil)
+            .help(vm.selectedProfile == nil ? "Choose an ICC profile to apply" : "Save soft proof settings without modifying the image")
 
             // Apply to Canvas (bakes proofed image into canvas tile)
             Button("Apply to Canvas") {
@@ -414,6 +415,12 @@ struct SoftProofPanel: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(vm.selectedProfile == nil || vm.proofedImage == nil || vm.isRendering)
+            .help({
+                if vm.isRendering { return "Rendering proof preview..." }
+                if vm.selectedProfile == nil { return "Choose an ICC profile first" }
+                if vm.proofedImage == nil { return "Waiting for the proof preview to render" }
+                return "Bake the soft-proofed image into the canvas tile"
+            }())
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

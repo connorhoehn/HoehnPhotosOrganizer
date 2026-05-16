@@ -9,7 +9,13 @@ struct HoehnPhotosOrganizerApp: App {
     // this type and must not be changed.
     let appDatabase: AppDatabase = {
         do { return try AppDatabase.makeShared() }
-        catch { fatalError("Failed to open database: \(error)") }
+        catch {
+            // The app cannot function without its local catalog database.
+            // makeShared() failures usually mean a corrupt file, a failed
+            // migration, or insufficient permissions in Application Support.
+            // Surface the underlying error so support logs are actionable.
+            fatalError("HoehnPhotosOrganizer: failed to open local catalog database at launch (AppDatabase.makeShared): \(error)")
+        }
     }()
 
     // Shared activity stack — injected into environment and reused by RollbackEngine.
@@ -63,7 +69,12 @@ struct HoehnPhotosOrganizerApp: App {
     init() {
         let db: AppDatabase
         do { db = try AppDatabase.makeShared() }
-        catch { fatalError("Failed to open database: \(error)") }
+        catch {
+            // The app cannot function without its local catalog database.
+            // makeShared() failures usually mean a corrupt file, a failed
+            // migration, or insufficient permissions in Application Support.
+            fatalError("HoehnPhotosOrganizer: failed to open local catalog database in init (AppDatabase.makeShared): \(error)")
+        }
 
         let repo = ActivityEventRepository(db: db)
         let service = ActivityEventService(repo: repo)

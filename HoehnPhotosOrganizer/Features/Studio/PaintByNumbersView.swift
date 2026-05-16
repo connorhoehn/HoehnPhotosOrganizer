@@ -1224,6 +1224,7 @@ struct PaintByNumbersView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .disabled(viewModel.config.thresholds.thresholds.count >= 12)
+                .help(viewModel.config.thresholds.thresholds.count >= 12 ? "Maximum 12 thresholds reached" : "Add a new threshold (more thresholds = more regions)")
             }
 
             Text("Each threshold divides the grayscale range into one more region. Add/remove thresholds to control region count.")
@@ -1268,6 +1269,7 @@ struct PaintByNumbersView: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                     .disabled(viewModel.config.thresholds.thresholds.count <= 1)
+                    .help(viewModel.config.thresholds.thresholds.count <= 1 ? "At least one threshold is required" : "Remove this threshold")
                 }
             }
         }
@@ -1353,6 +1355,7 @@ struct PaintByNumbersView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(viewModel.sourceImage == nil)
+                .help(viewModel.sourceImage == nil ? "Load a source image first" : "Merge tiny shapes below the minimum pixel size into neighbours")
             }
 
             Divider()
@@ -1392,6 +1395,7 @@ struct PaintByNumbersView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(viewModel.sourceImage == nil)
+                .help(viewModel.sourceImage == nil ? "Load a source image first" : "Smooth region boundaries using the kernel size above")
             }
 
             // Shape stats summary
@@ -1600,6 +1604,7 @@ struct PaintByNumbersView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(viewModel.sourceImage == nil)
+                    .help(viewModel.sourceImage == nil ? "Load a source image to render" : "Render the paint-by-numbers output")
 
                     // Export menu
                     Menu {
@@ -1610,6 +1615,7 @@ struct PaintByNumbersView: View {
                                 Text(exportLabel(for: format))
                             }
                             .disabled(format == .regionMaskPNG && viewModel.highlightedRegionIndex == nil)
+                            .help(format == .regionMaskPNG && viewModel.highlightedRegionIndex == nil ? "Highlight a region in the canvas first to export its mask" : "")
                         }
                     } label: {
                         HStack(spacing: 4) {
@@ -1621,6 +1627,7 @@ struct PaintByNumbersView: View {
                     .menuStyle(.borderlessButton)
                     .frame(width: 80)
                     .disabled(viewModel.renderedImage == nil)
+                    .help(viewModel.renderedImage == nil ? "Render an image first to enable export" : "Export the rendered image in various formats")
                 }
             }
 
@@ -1638,6 +1645,7 @@ struct PaintByNumbersView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .disabled(viewModel.renderedImage == nil)
+            .help(viewModel.renderedImage == nil ? "Render an image first to export a print template" : "Export a printable template with numbered regions and a color legend")
 
             // Reset
             Button {

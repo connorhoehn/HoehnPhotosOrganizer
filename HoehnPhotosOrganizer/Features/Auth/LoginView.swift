@@ -9,6 +9,121 @@ import SwiftUI
 import Foundation
 import HoehnPhotosCore
 
+// MARK: - Login hero graphic
+
+private struct LoginHeroView: View {
+    @State private var shimmerPhase: CGFloat = -1
+
+    var body: some View {
+        ZStack {
+            // Layered photo stack
+            ForEach(Array([Color(hue: 0.62, saturation: 0.18, brightness: 0.92),
+                           Color(hue: 0.55, saturation: 0.22, brightness: 0.88),
+                           Color(hue: 0.60, saturation: 0.26, brightness: 0.82)].enumerated()), id: \.offset) { index, fill in
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(fill)
+                    .frame(width: 100, height: 80)
+                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                    .rotationEffect(.degrees(Double(index - 1) * 10))
+                    .offset(x: CGFloat(index - 1) * 4, y: CGFloat(index - 1) * -4)
+            }
+
+            // Top card: aperture-style icon
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.white.opacity(0.96))
+                .frame(width: 100, height: 80)
+                .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
+                .overlay {
+                    ZStack {
+                        // Shimmer sweep
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: shimmerPhase - 0.3),
+                                .init(color: .white.opacity(0.5), location: shimmerPhase),
+                                .init(color: .clear, location: shimmerPhase + 0.3),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                        // Aperture blades
+                        ForEach(0..<6, id: \.self) { i in
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color(hue: 0.58, saturation: 0.6, brightness: 0.65),
+                                                 Color(hue: 0.62, saturation: 0.5, brightness: 0.55)],
+                                        startPoint: .top, endPoint: .bottom
+                                    )
+                                )
+                                .frame(width: 6, height: 20)
+                                .offset(y: -14)
+                                .rotationEffect(.degrees(Double(i) * 60))
+                        }
+
+                        // Lens circle
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [Color(hue: 0.60, saturation: 0.55, brightness: 0.72),
+                                             Color(hue: 0.62, saturation: 0.65, brightness: 0.45)],
+                                    center: .init(x: 0.35, y: 0.3),
+                                    startRadius: 2, endRadius: 16
+                                )
+                            )
+                            .frame(width: 28, height: 28)
+
+                        // Lens glint
+                        Circle()
+                            .fill(.white.opacity(0.55))
+                            .frame(width: 7, height: 7)
+                            .offset(x: -5, y: -5)
+                    }
+                }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 2.4).repeatForever(autoreverses: false)) {
+                shimmerPhase = 1.6
+            }
+        }
+    }
+}
+
+// MARK: - Mesh gradient background
+
+private struct LoginBackgroundView: View {
+    @State private var animate = false
+
+    var body: some View {
+        ZStack {
+            Color(hue: 0.60, saturation: 0.06, brightness: 0.97)
+
+            // Soft blobs
+            ForEach([
+                (x: 0.15, y: 0.2, hue: 0.58, sat: 0.28, size: 340.0),
+                (x: 0.85, y: 0.75, hue: 0.62, sat: 0.22, size: 280.0),
+                (x: 0.5,  y: 0.5, hue: 0.60, sat: 0.15, size: 220.0),
+            ], id: \.x) { blob in
+                Circle()
+                    .fill(Color(hue: blob.hue, saturation: blob.sat, brightness: 0.92))
+                    .frame(width: blob.size, height: blob.size)
+                    .position(x: blob.x * 480, y: blob.y * 460)
+                    .blur(radius: 80)
+                    .opacity(animate ? 0.7 : 0.5)
+                    .animation(
+                        .easeInOut(duration: 4).repeatForever(autoreverses: true),
+                        value: animate
+                    )
+            }
+        }
+        .ignoresSafeArea()
+        .onAppear { animate = true }
+    }
+}
+
+// MARK: - LoginView
+
 struct LoginView: View {
     @EnvironmentObject var auth: AuthEnvironment
 
@@ -25,45 +140,62 @@ struct LoginView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer(minLength: 0)
+        ZStack {
+            LoginBackgroundView()
 
-            VStack(spacing: 8) {
-                Image(systemName: "photo.stack.fill")
-                    .font(.system(size: 56, weight: .semibold))
-                    .foregroundStyle(.primary)
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
 
-                Text("HoehnPhotos")
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                // Hero
+                VStack(spacing: 16) {
+                    LoginHeroView()
+                        .frame(height: 120)
 
-                Text("Your library, organized beautifully.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+                    VStack(spacing: 4) {
+                        Text("HoehnPhotos")
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hue: 0.60, saturation: 0.7, brightness: 0.45),
+                                             Color(hue: 0.62, saturation: 0.6, brightness: 0.35)],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                            )
 
-            Spacer(minLength: 0)
-
-            VStack(spacing: 12) {
-                switch stage {
-                case .credentials:
-                    credentialsForm
-                case .newPassword:
-                    newPasswordForm
+                        Text("Your library, organized beautifully.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
-                if let errorMessage {
-                    errorBanner(errorMessage)
-                }
+                Spacer(minLength: 0)
 
-                #if DEBUG
-                debugSkipButton
-                #endif
+                // Form card
+                VStack(spacing: 12) {
+                    switch stage {
+                    case .credentials:
+                        credentialsForm
+                    case .newPassword:
+                        newPasswordForm
+                    }
+
+                    if let errorMessage {
+                        errorBanner(errorMessage)
+                    }
+
+                    #if DEBUG
+                    debugSkipButton
+                    #endif
+                }
+                .frame(maxWidth: 340)
+                .padding(24)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: .black.opacity(0.08), radius: 20, y: 8)
+                .padding(.bottom, 40)
             }
-            .frame(maxWidth: 360)
-            .padding(.bottom, 32)
+            .padding(.horizontal, 32)
         }
-        .padding(32)
-        .frame(minWidth: 480, minHeight: 460)
+        .frame(minWidth: 480, minHeight: 480)
     }
 
     // MARK: Subviews

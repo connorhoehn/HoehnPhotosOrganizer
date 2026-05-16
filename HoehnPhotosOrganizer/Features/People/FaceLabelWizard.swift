@@ -753,7 +753,8 @@ private struct SidebarPersonRow: View {
     private func loadCrop() async {
         guard let record = sampleRecord else { return }
         image = await FaceCropCache.shared.crop(
-            id: record.id,
+            faceId: record.id,
+            sourceURL: record.sourceURL,
             proxyURL: record.proxyURL,
             bbox: record.bbox
         )
@@ -797,7 +798,8 @@ private struct WizardFaceChip: View {
 
     private func loadCrop() async {
         image = await FaceCropCache.shared.crop(
-            id: record.id,
+            faceId: record.id,
+            sourceURL: record.sourceURL,
             proxyURL: record.proxyURL,
             bbox: record.bbox
         )
@@ -829,7 +831,8 @@ private struct PersonMiniChip: View {
     private func loadCrop() async {
         guard let record else { return }
         image = await FaceCropCache.shared.crop(
-            id: record.id,
+            faceId: record.id,
+            sourceURL: record.sourceURL,
             proxyURL: record.proxyURL,
             bbox: record.bbox
         )
@@ -910,7 +913,8 @@ private struct FacePreviewOverlay: View {
     private func loadImages() async {
         // Load face crop
         faceCrop = await FaceCropCache.shared.crop(
-            id: record.id,
+            faceId: record.id,
+            sourceURL: record.sourceURL,
             proxyURL: record.proxyURL,
             bbox: record.bbox
         )

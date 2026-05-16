@@ -262,67 +262,71 @@ actor TriageJobRepository {
         let keeperPhotos = photos.filter { $0.curationState == "keeper" }
         let keeperCount = Double(keeperPhotos.count)
 
-        // Dimension 1: Curation — rated photos / total
+        // Dimension 1: Curation — rated photos / total (computed in-memory from the
+        // photo array we already fetched; no DB hit).
         let ratedCount = Double(photos.filter { $0.curationState != "needs_review" }.count)
         let curationScore = ratedCount / count
 
-        // Dimension 2: People — faces with identified person / total faces
+        // Single round-trip: collapse the 4 previously-separate read transactions
+        // into one block. Each was its own `dbPool.read { ... }` with its own actor
+        // hop and fsync barrier; consolidating them is roughly 4x faster on the DB
+        // and avoids interleaving with concurrent writes from the proxy + face
+        // pipelines that run during import.
         let photoIdList = photos.map { "'\($0.id)'" }.joined(separator: ",")
-        let totalFaces: Double = try await db.dbPool.read { d in
-            let n = try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM face_embeddings WHERE photo_id IN (\(photoIdList))") ?? 0
-            return Double(n)
+        let keeperIdList = keeperPhotos.map { "'\($0.id)'" }.joined(separator: ",")
+
+        struct CompletenessCounts {
+            var totalFaces: Int = 0
+            var identifiedFaces: Int = 0
+            var developedKeepers: Int = 0
+            var keepersWithMetadata: Int = 0
         }
-        let identifiedFaces: Double = totalFaces == 0 ? 0 : try await db.dbPool.read { d in
-            let rows = try Row.fetchAll(d, sql: """
-                SELECT COUNT(DISTINCT fe.id) as cnt
-                FROM face_embeddings fe
-                JOIN person_identities pi ON pi.id = fe.person_id
-                WHERE fe.photo_id IN (\(photoIdList))
-                AND pi.name IS NOT NULL AND pi.name != ''
-            """)
-            return Double(rows.first?["cnt"] as? Int64 ?? 0)
+        let counts: CompletenessCounts = try await db.dbPool.read { d in
+            var c = CompletenessCounts()
+            c.totalFaces = try Int.fetchOne(
+                d, sql: "SELECT COUNT(*) FROM face_embeddings WHERE photo_id IN (\(photoIdList))"
+            ) ?? 0
+            if c.totalFaces > 0 {
+                c.identifiedFaces = Int(try Row.fetchOne(d, sql: """
+                    SELECT COUNT(DISTINCT fe.id) as cnt
+                    FROM face_embeddings fe
+                    JOIN person_identities pi ON pi.id = fe.person_id
+                    WHERE fe.photo_id IN (\(photoIdList))
+                      AND pi.name IS NOT NULL AND pi.name != ''
+                """)?["cnt"] as? Int64 ?? 0)
+            }
+            if keeperCount > 0 {
+                c.developedKeepers = try Int.fetchOne(d, sql: """
+                    SELECT COUNT(*) FROM photo_assets
+                    WHERE id IN (\(keeperIdList))
+                      AND (
+                          (adjustments_json IS NOT NULL AND adjustments_json != '' AND adjustments_json != '{}')
+                          OR id IN (SELECT DISTINCT photo_id FROM development_versions)
+                      )
+                """) ?? 0
+                c.keepersWithMetadata = try Int.fetchOne(d, sql: """
+                    SELECT COUNT(*) FROM photo_assets
+                    WHERE id IN (\(keeperIdList))
+                      AND user_metadata_json IS NOT NULL
+                      AND user_metadata_json != '{}'
+                      AND user_metadata_json LIKE '%"title"%'
+                """) ?? 0
+            }
+            return c
         }
+
         // If no faces detected, people dimension is fully satisfied
-        let peopleScore: Double = totalFaces == 0 ? 1.0 : identifiedFaces / totalFaces
+        let peopleScore: Double = counts.totalFaces == 0
+            ? 1.0
+            : Double(counts.identifiedFaces) / Double(counts.totalFaces)
 
-        // Dimension 3: Developed — keepers with adjustments OR a development version / total keepers
-        let developedScore: Double
-        if keeperCount == 0 {
-            developedScore = 1.0  // No keepers yet, not blocking
-        } else {
-            let keeperIdList = keeperPhotos.map { "'\($0.id)'" }.joined(separator: ",")
-            let developedCount: Double = try await db.dbPool.read { d in
-                let n = try Int.fetchOne(d, sql: """
-                    SELECT COUNT(*) FROM photo_assets
-                    WHERE id IN (\(keeperIdList))
-                    AND (
-                        (adjustments_json IS NOT NULL AND adjustments_json != '' AND adjustments_json != '{}')
-                        OR id IN (SELECT DISTINCT photo_id FROM development_versions)
-                    )
-                """) ?? 0
-                return Double(n)
-            }
-            developedScore = developedCount / keeperCount
-        }
+        let developedScore: Double = keeperCount == 0
+            ? 1.0
+            : Double(counts.developedKeepers) / keeperCount
 
-        // Dimension 4: Metadata — keepers with title/caption / total keepers
-        let metadataScore: Double
-        if keeperCount == 0 {
-            metadataScore = 1.0  // No keepers yet, not blocking
-        } else {
-            let keeperIdList = keeperPhotos.map { "'\($0.id)'" }.joined(separator: ",")
-            let withMetaCount: Double = try await db.dbPool.read { d in
-                let n = try Int.fetchOne(d, sql: """
-                    SELECT COUNT(*) FROM photo_assets
-                    WHERE id IN (\(keeperIdList))
-                    AND user_metadata_json IS NOT NULL
-                    AND user_metadata_json != '{}'
-                    AND user_metadata_json LIKE '%"title"%'
-                """) ?? 0
-                return Double(n)
-            }
-            metadataScore = withMetaCount / keeperCount
-        }
+        let metadataScore: Double = keeperCount == 0
+            ? 1.0
+            : Double(counts.keepersWithMetadata) / keeperCount
 
         // Equal-weight average across 4 dimensions
         let score = (curationScore  * CompletenessWeights.curation  +
@@ -350,60 +354,58 @@ actor TriageJobRepository {
         let culled = photos.filter { $0.curationState != "needs_review" }.count
         let reviewDone = culled == photos.count
 
-        // 2. Face identification — all detected faces have a person label
-        let totalFaces: Int = try await db.dbPool.read { d in
-            try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM face_embeddings WHERE photo_id IN (\(inClause))") ?? 0
-        }
-        let identifiedFaces: Int = totalFaces == 0 ? 0 : try await db.dbPool.read { d in
-            try Int.fetchOne(d, sql: """
-                SELECT COUNT(DISTINCT fe.id) FROM face_embeddings fe
-                JOIN person_identities pi ON pi.id = fe.person_id
-                WHERE fe.photo_id IN (\(inClause))
-                AND pi.name IS NOT NULL AND pi.name != ''
-            """) ?? 0
-        }
-        let hasFaces = totalFaces > 0
-        let facesDone = hasFaces && identifiedFaces >= totalFaces
-
-        // 3. Develop — keepers with adjustments OR a development version
+        // Single round-trip consolidation. This function runs once per visible job in
+        // the sidebar to compute its readiness ring — 4 separate `dbPool.read` calls
+        // per job × N jobs was making job-list refreshes feel sluggish.
         let keeperPhotos = photos.filter { $0.curationState == "keeper" }
         let keeperCount = keeperPhotos.count
         let keeperClause = keeperPhotos.map { "'\($0.id)'" }.joined(separator: ",")
-        let developDone: Bool
-        if keeperCount == 0 {
-            developDone = false
-        } else {
-            let developed: Int = try await db.dbPool.read { d in
-                try Int.fetchOne(d, sql: """
-                    SELECT COUNT(*) FROM photo_assets
-                    WHERE id IN (\(keeperClause))
-                    AND (
-                        (adjustments_json IS NOT NULL AND adjustments_json != '' AND adjustments_json != '{}')
-                        OR id IN (SELECT DISTINCT photo_id FROM development_versions)
-                    )
+
+        struct TaskCounts {
+            var totalFaces: Int = 0
+            var identifiedFaces: Int = 0
+            var developedKeepers: Int = 0
+            var keepersWithoutMeta: Int = 0
+        }
+        let counts: TaskCounts = try await db.dbPool.read { d in
+            var c = TaskCounts()
+            c.totalFaces = try Int.fetchOne(
+                d, sql: "SELECT COUNT(*) FROM face_embeddings WHERE photo_id IN (\(inClause))"
+            ) ?? 0
+            if c.totalFaces > 0 {
+                c.identifiedFaces = try Int.fetchOne(d, sql: """
+                    SELECT COUNT(DISTINCT fe.id) FROM face_embeddings fe
+                    JOIN person_identities pi ON pi.id = fe.person_id
+                    WHERE fe.photo_id IN (\(inClause))
+                      AND pi.name IS NOT NULL AND pi.name != ''
                 """) ?? 0
             }
-            developDone = developed >= keeperCount
+            if keeperCount > 0 {
+                c.developedKeepers = try Int.fetchOne(d, sql: """
+                    SELECT COUNT(*) FROM photo_assets
+                    WHERE id IN (\(keeperClause))
+                      AND (
+                          (adjustments_json IS NOT NULL AND adjustments_json != '' AND adjustments_json != '{}')
+                          OR id IN (SELECT DISTINCT photo_id FROM development_versions)
+                      )
+                """) ?? 0
+                c.keepersWithoutMeta = try Int.fetchOne(d, sql: """
+                    SELECT COUNT(*) FROM photo_assets
+                    WHERE id IN (\(keeperClause))
+                      AND (
+                          user_metadata_json IS NULL
+                          OR user_metadata_json = '{}'
+                          OR user_metadata_json NOT LIKE '%"title"%'
+                      )
+                """) ?? 0
+            }
+            return c
         }
 
-        // 4. Metadata — keepers with title/caption
-        let metadataDone: Bool
-        if keeperCount == 0 {
-            metadataDone = false
-        } else {
-            let withoutMeta: Int = try await db.dbPool.read { d in
-                try Int.fetchOne(d, sql: """
-                    SELECT COUNT(*) FROM photo_assets
-                    WHERE id IN (\(keeperClause))
-                    AND (
-                        user_metadata_json IS NULL
-                        OR user_metadata_json = '{}'
-                        OR user_metadata_json NOT LIKE '%"title"%'
-                    )
-                """) ?? 0
-            }
-            metadataDone = withoutMeta == 0
-        }
+        let hasFaces = counts.totalFaces > 0
+        let facesDone = hasFaces && counts.identifiedFaces >= counts.totalFaces
+        let developDone = keeperCount > 0 && counts.developedKeepers >= keeperCount
+        let metadataDone = keeperCount > 0 && counts.keepersWithoutMeta == 0
 
         // Count total tasks and completed tasks (faces task only appears if faces exist)
         var total = 3  // review, develop, metadata always present

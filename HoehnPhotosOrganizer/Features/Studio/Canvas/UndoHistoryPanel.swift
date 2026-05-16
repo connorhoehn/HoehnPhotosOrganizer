@@ -20,6 +20,7 @@ struct UndoHistoryPanel: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .disabled(commandStack.commands.isEmpty)
+                .help(commandStack.commands.isEmpty ? "No history to clear" : "Clear all undo history")
                 .confirmationDialog(
                     "Clear all history?",
                     isPresented: $showClearConfirmation

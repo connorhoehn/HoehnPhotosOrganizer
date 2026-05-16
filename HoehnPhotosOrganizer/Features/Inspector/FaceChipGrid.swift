@@ -104,19 +104,10 @@ struct FaceChipGrid: View {
     private func loadFaceNames() async {
         guard let db else { return }
         do {
+            // Single JOIN query — was previously two queries per cell, with the
+            // second loading every person in the DB on each scroll.
             let faceRepo = FaceEmbeddingRepository(db: db)
-            let embeddings = try await faceRepo.fetchByPhotoId(photo.id)
-            let personRepo = PersonRepository(db: db)
-            let people = try await personRepo.fetchAll()
-            let personMap = Dictionary(uniqueKeysWithValues: people.map { ($0.id, $0.name) })
-
-            var names: [Int: String] = [:]
-            for emb in embeddings {
-                if let personId = emb.personId, let name = personMap[personId] {
-                    names[emb.faceIndex] = name
-                }
-            }
-            faceNames = names
+            faceNames = try await faceRepo.fetchFaceLabels(forPhotoId: photo.id)
         } catch {
             print("[FaceChipGrid] Failed to load person names: \(error)")
         }

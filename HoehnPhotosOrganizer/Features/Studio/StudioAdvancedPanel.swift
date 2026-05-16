@@ -173,6 +173,7 @@ struct StudioAdvancedPanel: View {
                 .buttonStyle(.bordered)
                 .controlSize(.mini)
                 .disabled(viewModel.sourceImage == nil)
+                .help(viewModel.sourceImage == nil ? "Load a source image to crop" : "Crop the source image")
             }
 
             Button {
@@ -254,6 +255,7 @@ struct StudioAdvancedPanel: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .disabled(viewModel.renderedImage == nil)
+            .help(viewModel.renderedImage == nil ? "Render an image first to save a version" : "Save the current render as a named version in history")
 
             Button {
                 viewModel.exportRenderedImage()
@@ -265,6 +267,7 @@ struct StudioAdvancedPanel: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .disabled(viewModel.renderedImage == nil)
+            .help(viewModel.renderedImage == nil ? "Render an image first to export" : "Export the rendered image to disk")
         }
     }
 
@@ -475,12 +478,14 @@ struct StudioAdvancedPanel: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(thresholdCount <= 2)
+                .help(thresholdCount <= 2 ? "Minimum 2 thresholds required" : "Remove the last threshold")
                 Button { addThreshold() } label: {
                     Image(systemName: "plus.circle")
                         .font(.system(size: 11))
                 }
                 .buttonStyle(.plain)
                 .disabled(thresholdCount >= 8)
+                .help(thresholdCount >= 8 ? "Maximum 8 thresholds reached" : "Add a new threshold")
             }
 
             ForEach(0..<thresholdCount, id: \.self) { i in

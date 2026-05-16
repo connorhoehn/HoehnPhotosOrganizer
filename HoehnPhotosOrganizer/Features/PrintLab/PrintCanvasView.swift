@@ -201,12 +201,16 @@ struct PrintCanvasView: View {
             let paperH   = displayH * scale
 
             // The total pasteboard is the paper plus margin on each side.
-            // If the viewport is larger than the pasteboard, center the paper.
+            // If the viewport is larger than the pasteboard, center the paper in the
+            // viewport. Without this, `originX/Y = pasteboardMargin` pins the paper at
+            // the top-left of the content frame and the ScrollView lands scrolled to
+            // top-of-content (which looks like "bottom of rulers") on open.
             let pasteboardW = paperW + pasteboardMargin * 2
             let pasteboardH = paperH + pasteboardMargin * 2
-            // Paper origin within the pasteboard content
-            let originX = pasteboardMargin
-            let originY = pasteboardMargin
+            let contentW = max(canvasW, pasteboardW)
+            let contentH = max(canvasH, pasteboardH)
+            let originX = (contentW - paperW) / 2
+            let originY = (contentH - paperH) / 2
 
             ZStack(alignment: .topLeading) {
                 Color(nsColor: .windowBackgroundColor)
@@ -220,23 +224,26 @@ struct PrintCanvasView: View {
                         leftRuler(availableHeight: canvasH, paperOriginY: originY, scale: scale)
                         ScrollViewReader { scrollProxy in
                             ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                                paperCanvas(
-                                    canvasSize: CGSize(width: canvasW, height: canvasH),
-                                    paperOriginX: originX, paperOriginY: originY,
-                                    paperW: paperW, paperH: paperH, scale: scale
-                                )
-                                .frame(
-                                    width: max(canvasW, pasteboardW),
-                                    height: max(canvasH, pasteboardH)
-                                )
-                                // Invisible anchor at the paper center for initial scroll
-                                Color.clear
-                                    .frame(width: 1, height: 1)
-                                    .id("paperCenter")
-                                    .position(
-                                        x: originX + paperW / 2,
-                                        y: originY + paperH / 2
+                                // ZStack keeps the paperCenter anchor OVERLAID on the
+                                // canvas. As a sibling (implicit VStack) the anchor's
+                                // `.position(...)` was extending the ScrollView's content
+                                // size below the canvas, making the natural scroll
+                                // position land at the bottom on open.
+                                ZStack(alignment: .topLeading) {
+                                    paperCanvas(
+                                        canvasSize: CGSize(width: canvasW, height: canvasH),
+                                        paperOriginX: originX, paperOriginY: originY,
+                                        paperW: paperW, paperH: paperH, scale: scale
                                     )
+                                    Color.clear
+                                        .frame(width: 1, height: 1)
+                                        .id("paperCenter")
+                                        .position(
+                                            x: originX + paperW / 2,
+                                            y: originY + paperH / 2
+                                        )
+                                }
+                                .frame(width: contentW, height: contentH)
                             }
                             .clipped()
                             .gesture(
@@ -1050,7 +1057,12 @@ class CanvasPrintView: NSView {
                                  width:  paperWidth  * 72,
                                  height: paperHeight * 72))
     }
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) {
+        // This NSView subclass is created programmatically from
+        // PrintCanvasView (SwiftUI) — it is never loaded from a nib or storyboard.
+        // Reaching this initializer indicates a build-time misconfiguration.
+        fatalError("init(coder:) is not supported — PrintCanvasNSView is constructed programmatically only")
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         let pts: CGFloat = 72

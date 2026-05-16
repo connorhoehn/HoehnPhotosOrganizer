@@ -11,6 +11,11 @@ import AppKit
 struct JobPeopleWidget: View {
     let photoIds: [String]
     var onDone: (() -> Void)? = nil
+    /// Fired after a successful label/skip operation so the host (JobDetailView) can
+    /// re-query its face counters and keep the background card's "X of N identified"
+    /// progress in sync with what the modal is showing. Without this, the card stays
+    /// frozen at the count from when the modal opened.
+    var onLabelsChanged: (() -> Void)? = nil
 
     @Environment(\.appDatabase) private var db
     @Environment(\.dismiss) private var dismiss
@@ -29,6 +34,22 @@ struct JobPeopleWidget: View {
     @State private var autoAdvance = true
     @State private var confirmationFlash: String? = nil
     @FocusState private var inputFocused: Bool
+
+    /// Records the most recent label/skip/stranger action so Undo can revert it.
+    /// `clusterSnapshot` lets us put the cluster back in the carousel after a clearPerson
+    /// since the loop normally removes processed clusters.
+    @State private var lastAction: UndoableAction? = nil
+
+    /// Set when the user taps "Mark Rest as Strangers" — wires a confirmation dialog
+    /// before the destructive action so accidental clicks have a back-out.
+    @State private var showBulkConfirm = false
+
+    private struct UndoableAction {
+        let faceIds: [String]
+        let clusterSnapshot: [FaceGalleryRecord]   // the cluster that was labeled
+        let insertAtIndex: Int                     // where to re-insert it on undo
+        let label: String                          // human-readable for the toast
+    }
 
     private var currentCluster: [FaceGalleryRecord] { clusters[safe: currentIndex] ?? [] }
 
@@ -88,7 +109,49 @@ struct JobPeopleWidget: View {
                         .buttonStyle(.bordered).controlSize(.small)
                         .disabled(currentIndex >= clusters.count - 1)
                 }
+
+                // Bulk-finish escape hatch: when the user has labeled the people they
+                // care about and just wants to mark the rest off, one click marks
+                // every remaining unlabeled face as Stranger and closes the modal.
+                Button {
+                    showBulkConfirm = true
+                } label: {
+                    Label("Mark Rest as Strangers", systemImage: "person.crop.circle.badge.xmark")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Mark every remaining unlabeled face as Stranger and close")
+                .disabled(isSaving || unlabeledCount == 0)
+                .confirmationDialog(
+                    "Mark \(unlabeledCount) face\(unlabeledCount == 1 ? "" : "s") as Stranger?",
+                    isPresented: $showBulkConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("Mark \(unlabeledCount) as Stranger", role: .destructive) {
+                        markAllRemainingAsStranger()
+                    }
+                    Button("Cancel", role: .cancel) { }
+                } message: {
+                    Text("You can still undo individual faces from the People gallery, but this closes the wizard.")
+                }
             }
+
+            // Undo the most recent label/skip/bulk operation. Visible whenever there's
+            // an action on the stack — clearing it restores the cluster to the carousel.
+            if let last = lastAction {
+                Button {
+                    undoLastAction()
+                } label: {
+                    Label("Undo \(last.label)", systemImage: "arrow.uturn.backward")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Restore the most recently labeled cluster to unlabeled")
+                .disabled(isSaving)
+            }
+
             Button("Done") { onDone?(); dismiss() }
                 .buttonStyle(.bordered).controlSize(.small)
         }
@@ -264,16 +327,99 @@ struct JobPeopleWidget: View {
                 )
                 let updatedPeople = (try? await PersonRepository(db: db).fetchAll()) ?? []
                 await MainActor.run {
+                    let removedIndex = currentIndex
+                    let removedCluster = clusters[removedIndex]
                     clusters.remove(at: currentIndex)
                     currentIndex = min(currentIndex, max(0, clusters.count - 1))
                     existingPeople = updatedPeople.filter { $0.name != "Stranger" }
+                    // Recompute the modal's own visible counts so headerBar's
+                    // "X of Y faces to identify" stays in sync as clusters drain.
+                    unlabeledCount = max(0, unlabeledCount - ids.count)
                     assignName = ""
                     isSaving = false
                     inputFocused = true
                     showConfirmationAndAdvance("Assigned as \(name)")
+                    lastAction = UndoableAction(
+                        faceIds: ids,
+                        clusterSnapshot: removedCluster,
+                        insertAtIndex: removedIndex,
+                        label: "Assign"
+                    )
+                    onLabelsChanged?()
                 }
             } catch {
                 await MainActor.run { statusMsg = "Error: \(error.localizedDescription)"; isSaving = false }
+            }
+        }
+    }
+
+    /// Reverts the most recent label/stranger/bulk action — calls `clearPerson` on each
+    /// of the affected face IDs, then re-inserts the cluster snapshot back into the
+    /// carousel at its original position. For bulk operations, `clusterSnapshot` holds
+    /// the merged set of all faces that were stranger'd in a single pseudo-cluster.
+    private func undoLastAction() {
+        guard !isSaving, let db, let last = lastAction else { return }
+        isSaving = true
+        Task {
+            let faceRepo = FaceEmbeddingRepository(db: db)
+            for id in last.faceIds {
+                try? await faceRepo.clearPerson(faceId: id)
+            }
+            await MainActor.run {
+                let insertAt = min(last.insertAtIndex, clusters.count)
+                clusters.insert(last.clusterSnapshot, at: insertAt)
+                currentIndex = insertAt
+                unlabeledCount += last.faceIds.count
+                lastAction = nil
+                isSaving = false
+                inputFocused = true
+                showConfirmationAndAdvance("Undone")
+                onLabelsChanged?()
+            }
+        }
+    }
+
+    /// Bulk-finish path: marks every face across every remaining cluster as Stranger
+    /// in a single batched DB write, then dismisses. Lets the user escape the
+    /// one-cluster-at-a-time pace when they've labeled everyone they care about.
+    private func markAllRemainingAsStranger() {
+        guard !isSaving, let db else { return }
+        // Flatten every cluster's face IDs — clusters[currentIndex] included.
+        let allIds = clusters.flatMap { $0.map(\.id) }
+        guard !allIds.isEmpty else { onDone?(); dismiss(); return }
+        // Snapshot the entire flat cluster set so an Undo can restore them all.
+        let flatSnapshot = clusters.flatMap { $0 }
+        let originalIndex = currentIndex
+        isSaving = true
+        Task {
+            do {
+                try await FaceLabelingService.label(
+                    faceIds: allIds, as: "Stranger",
+                    personRepo: PersonRepository(db: db),
+                    faceRepo: FaceEmbeddingRepository(db: db)
+                )
+                await MainActor.run {
+                    clusters.removeAll()
+                    currentIndex = 0
+                    unlabeledCount = 0
+                    isSaving = false
+                    // Don't auto-dismiss — leave the user with the empty state plus the
+                    // Undo button in the header. They can click Undo to revert, or Done
+                    // to close. This is the post-action undo window the user asked for.
+                    lastAction = UndoableAction(
+                        faceIds: allIds,
+                        clusterSnapshot: flatSnapshot,
+                        insertAtIndex: originalIndex,
+                        label: "Mark Rest"
+                    )
+                    showConfirmationAndAdvance("Marked \(allIds.count) as Stranger")
+                    onLabelsChanged?()
+                }
+            } catch {
+                await MainActor.run {
+                    statusMsg = "Error: \(error.localizedDescription)"
+                    isSaving = false
+                }
             }
         }
     }
@@ -290,12 +436,22 @@ struct JobPeopleWidget: View {
                     faceRepo: FaceEmbeddingRepository(db: db)
                 )
                 await MainActor.run {
+                    let removedIndex = currentIndex
+                    let removedCluster = clusters[removedIndex]
                     clusters.remove(at: currentIndex)
                     currentIndex = min(currentIndex, max(0, clusters.count - 1))
+                    unlabeledCount = max(0, unlabeledCount - ids.count)
                     assignName = ""
                     isSaving = false
                     inputFocused = true
                     showConfirmationAndAdvance("Marked as Stranger")
+                    lastAction = UndoableAction(
+                        faceIds: ids,
+                        clusterSnapshot: removedCluster,
+                        insertAtIndex: removedIndex,
+                        label: "Stranger"
+                    )
+                    onLabelsChanged?()
                 }
             } catch {
                 await MainActor.run { statusMsg = "Error: \(error.localizedDescription)"; isSaving = false }

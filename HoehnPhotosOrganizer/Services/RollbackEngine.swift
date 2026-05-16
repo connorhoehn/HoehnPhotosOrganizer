@@ -31,15 +31,12 @@ class RollbackEngine: ObservableObject {
         guard let adjustment = PhotoAdjustments.decode(from: snapshot.adjustmentJSON) else {
             throw RollbackError.invalidSnapshotJSON
         }
-
-        // 2. Publish to live editor
-        currentAdjustment.send(adjustment)
-
-        // 2b. Publish mask layers if present
         let masks = MaskLayerStore.decode(from: snapshot.masksJSON)
-        currentMasks.send(masks)
 
-        // 3. Save a new snapshot (the rollback result becomes the new current state)
+        // 2. Save a new snapshot FIRST so the rollback is durable on disk before we
+        //    commit it to the live editor. Previously this published `currentAdjustment`
+        //    before the DB write succeeded — if the write threw, the UI showed the
+        //    restored state but the next launch would still see the old one.
         let rollbackSnapshot = AdjustmentSnapshot(
             id: UUID().uuidString,
             photoAssetId: photoAssetId,
@@ -51,6 +48,11 @@ class RollbackEngine: ObservableObject {
             createdAt: Date()
         )
         try await snapshotRepo.saveSnapshot(rollbackSnapshot)
+
+        // 3. Now publish to the live editor — the persisted state and the in-memory
+        //    state can no longer diverge on a failed write.
+        currentAdjustment.send(adjustment)
+        currentMasks.send(masks)
 
         // 4. Emit activity event (fire and forget — don't block rollback on logging)
         Task {

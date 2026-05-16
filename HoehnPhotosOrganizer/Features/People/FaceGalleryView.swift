@@ -209,7 +209,26 @@ final class FaceGalleryViewModel: ObservableObject {
 
     // MARK: - State
 
-    @Published var allRecords: [FaceGalleryRecord] = []
+    @Published var allRecords: [FaceGalleryRecord] = [] {
+        didSet { rebuildPersonIndex() }
+    }
+
+    /// `personId → records` lookup, populated once per `allRecords` assignment.
+    /// `peopleSummaryGrid` was previously filtering `allRecords` once per render *per
+    /// person card* — O(P × F) every body evaluation, freezing the People page on
+    /// large libraries. Reading this dict makes the grid O(P log P + P).
+    /// Only includes confirmed, non-needs-review faces (the same predicate the grid
+    /// applied inline before).
+    @Published var recordsByPersonId: [String: [FaceGalleryRecord]] = [:]
+
+    private func rebuildPersonIndex() {
+        var map: [String: [FaceGalleryRecord]] = [:]
+        for r in allRecords {
+            guard let pid = r.embedding.personId, !r.needsReview else { continue }
+            map[pid, default: []].append(r)
+        }
+        recordsByPersonId = map
+    }
     @Published var selectedFilter: FaceFilter = .all
     @Published var selectedIds: Set<String> = []
     @Published var isLoading = false
@@ -657,6 +676,12 @@ struct FaceGalleryView: View {
     @StateObject private var vm = FaceGalleryViewModel()
     @Environment(\.appDatabase) private var appDatabase: AppDatabase?
 
+    /// Library view model — passed in so the AI Tools panel can disable destructive
+    /// clustering/matching while face indexing or proxy generation is still in flight.
+    /// Running cluster algorithms on a partial face set produces noisy groups that get
+    /// invalidated the moment the next batch of faces lands.
+    @ObservedObject var libraryVM: LibraryViewModel
+
     // Drag-select state
     @State private var chipFrames: [String: CGRect] = [:]
     @State private var dragStartPoint: CGPoint?
@@ -857,7 +882,7 @@ struct FaceGalleryView: View {
             Divider()
 
             // ── Right: workflow panel ──
-            PeopleWorkflowPanel(vm: vm, appDatabase: appDatabase)
+            PeopleWorkflowPanel(vm: vm, appDatabase: appDatabase, libraryVM: libraryVM)
                 .frame(width: 260)
         }
         .sheet(isPresented: $vm.showClusterMergeSheet) {
@@ -1590,14 +1615,16 @@ struct FaceGalleryView: View {
     // MARK: - People summary (all labeled)
 
     private var peopleSummaryGrid: some View {
+        // O(P log P) sort + O(P) render using the precomputed personId → records index.
+        // Previously this filtered `vm.allRecords` once per person card during *every*
+        // body evaluation — O(P × F) per render — which is what froze the People page
+        // on libraries with many people / faces.
         let sortedPeople = vm.people.sorted { lhs, rhs in
-            let lCount = vm.allRecords.filter { $0.embedding.personId == lhs.id && !$0.needsReview }.count
-            let rCount = vm.allRecords.filter { $0.embedding.personId == rhs.id && !$0.needsReview }.count
-            return lCount > rCount
+            (vm.recordsByPersonId[lhs.id]?.count ?? 0) > (vm.recordsByPersonId[rhs.id]?.count ?? 0)
         }
         return LazyVGrid(columns: peopleCardColumns, spacing: 16) {
             ForEach(sortedPeople, id: \.id) { person in
-                let faces = vm.allRecords.filter { $0.embedding.personId == person.id && !$0.needsReview }
+                let faces = vm.recordsByPersonId[person.id] ?? []
                 PersonSummaryCard(
                     personId: person.id,
                     name: person.name,
@@ -1812,7 +1839,8 @@ private struct DuplicateFaceChip: View {
 
     private func loadFaceChip() async {
         image = await FaceCropCache.shared.crop(
-            id: record.id,
+            faceId: record.id,
+            sourceURL: record.sourceURL,
             proxyURL: record.proxyURL,
             bbox: record.bbox
         )
@@ -1824,6 +1852,9 @@ private struct DuplicateFaceChip: View {
 private struct PeopleWorkflowPanel: View {
     @ObservedObject var vm: FaceGalleryViewModel
     let appDatabase: AppDatabase?
+    /// Library view model — needed so the AI Tools section can disable destructive
+    /// clustering/matching while face indexing or proxy generation is still in flight.
+    @ObservedObject var libraryVM: LibraryViewModel
 
     @State private var labelName = ""
     @FocusState private var nameFocused: Bool
@@ -1887,10 +1918,22 @@ private struct PeopleWorkflowPanel: View {
             Divider()
 
             // AI tools
+            let pipelineActive = libraryVM.isFaceIndexing || libraryVM.isGeneratingProxies
             VStack(alignment: .leading, spacing: 10) {
                 Text("AI Tools")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
+
+                if pipelineActive {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.mini)
+                        Text("Waiting for face indexing to finish before grouping…")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    .padding(.bottom, 2)
+                }
 
                 Button {
                     Task { if let db = appDatabase { await vm.runClustering(db: db) } }
@@ -1900,8 +1943,10 @@ private struct PeopleWorkflowPanel: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
-                .disabled(vm.isClustering || vm.unlabeledCount < 2)
-                .help("Re-group remaining unlabeled faces")
+                .disabled(pipelineActive || vm.isClustering || vm.unlabeledCount < 2)
+                .help(pipelineActive
+                      ? "Disabled while face indexing is in progress."
+                      : "Re-group remaining unlabeled faces")
 
                 Button {
                     Task { if let db = appDatabase { await vm.runAutoMatch(db: db) } }
@@ -1911,8 +1956,10 @@ private struct PeopleWorkflowPanel: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
-                .disabled(vm.isRunningAutoMatch || vm.people.isEmpty)
-                .help("Compare unlabeled faces against your labeled references")
+                .disabled(pipelineActive || vm.isRunningAutoMatch || vm.people.isEmpty)
+                .help(pipelineActive
+                      ? "Disabled while face indexing is in progress."
+                      : "Compare unlabeled faces against your labeled references")
 
                 if vm.people.isEmpty {
                     Text("Label at least one face first to enable Auto-Match.")
@@ -1928,8 +1975,10 @@ private struct PeopleWorkflowPanel: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
-                .disabled(vm.isRunningClaudeReview || vm.needsReviewCount == 0)
-                .help("Send borderline matches to Claude Vision for confirmation")
+                .disabled(pipelineActive || vm.isRunningClaudeReview || vm.needsReviewCount == 0)
+                .help(pipelineActive
+                      ? "Disabled while face indexing is in progress."
+                      : "Send borderline matches to Claude Vision for confirmation")
 
                 if vm.needsReviewCount > 0 {
                     Text("\(vm.needsReviewCount) face\(vm.needsReviewCount == 1 ? "" : "s") queued for review.")
@@ -1945,8 +1994,10 @@ private struct PeopleWorkflowPanel: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
-                .disabled(vm.isRunningClusterMerge || vm.people.count < 2)
-                .help("Use Claude Vision to find clusters that look like the same person")
+                .disabled(pipelineActive || vm.isRunningClusterMerge || vm.people.count < 2)
+                .help(pipelineActive
+                      ? "Disabled while face indexing is in progress."
+                      : "Use Claude Vision to find clusters that look like the same person")
 
                 if vm.people.count < 2 {
                     Text("Need at least 2 people/clusters to suggest merges.")
@@ -2174,7 +2225,8 @@ private struct PersonSummaryThumbnail: View {
         .clipShape(Circle())
         .task(id: record.id) {
             image = await FaceCropCache.shared.crop(
-                id: record.id,
+                faceId: record.id,
+                sourceURL: record.sourceURL,
                 proxyURL: record.proxyURL,
                 bbox: record.bbox
             )
@@ -2201,14 +2253,20 @@ private struct FaceChipCell: View {
                 chipImage
                     .frame(width: chipSize, height: chipSize)
                     .clipShape(Circle())
+                    // Ring sits OUTSIDE the chip (negative padding pushes the stroke
+                    // path outward by half the line width) so it frames the face
+                    // instead of eating into it. The previous `.stroke` half-inside,
+                    // half-outside behavior visibly covered the face when selected.
                     .overlay(
-                        Circle().stroke(
-                            isSelected ? Color.accentColor
-                            : record.needsReview ? Color.orange
-                            : record.isLabeled ? Color.green.opacity(0.6)
-                            : Color(nsColor: .separatorColor),
-                            lineWidth: isSelected ? 3 : 1.5
-                        )
+                        Circle()
+                            .strokeBorder(
+                                isSelected ? Color.accentColor
+                                : record.needsReview ? Color.orange
+                                : record.isLabeled ? Color.green.opacity(0.6)
+                                : Color(nsColor: .separatorColor),
+                                lineWidth: isSelected ? 2.5 : 1.5
+                            )
+                            .padding(isSelected ? -2 : -0.5)
                     )
                     // Orange dot badge for needsReview (bottom-left corner)
                     .overlay(alignment: .bottomLeading) {
@@ -2223,9 +2281,12 @@ private struct FaceChipCell: View {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.white, Color.accentColor)
-                        .offset(x: 4, y: -4)
+                        .background(
+                            Circle().fill(Color(nsColor: .windowBackgroundColor)).padding(2)
+                        )
+                        .offset(x: 2, y: -2)
                 }
             }
 
@@ -2292,7 +2353,8 @@ private struct FaceChipCell: View {
     private func loadImage() async {
         guard !loaded else { return }
         let img = await FaceCropCache.shared.crop(
-            id: record.id,
+            faceId: record.id,
+            sourceURL: record.sourceURL,
             proxyURL: record.proxyURL,
             bbox: record.bbox
         )

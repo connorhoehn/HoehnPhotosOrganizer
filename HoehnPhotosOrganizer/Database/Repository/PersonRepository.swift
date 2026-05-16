@@ -57,12 +57,17 @@ actor PersonRepository {
     }
 
     /// Fetch all labeled people with their photo counts, ordered by count descending.
+    /// Counts are restricted to library-committed photos so the numbers shown to users
+    /// (and fed into Claude's search-context prompt) reflect the actual library, not
+    /// in-flight import jobs that may yet be cancelled.
     func fetchPeopleWithPhotoCounts() async throws -> [(name: String, count: Int)] {
         try await db.dbPool.read { db in
             let rows = try Row.fetchAll(db, sql: """
                 SELECT p.name, COUNT(DISTINCT fe.photo_id) as photo_count
                 FROM person_identities p
                 JOIN face_embeddings fe ON fe.person_id = p.id
+                JOIN photo_assets pa ON pa.id = fe.photo_id
+                WHERE pa.import_status = 'library'
                 GROUP BY p.id
                 ORDER BY photo_count DESC
                 """)

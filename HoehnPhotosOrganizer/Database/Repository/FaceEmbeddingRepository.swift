@@ -29,9 +29,40 @@ actor FaceEmbeddingRepository {
         }
     }
 
+    /// One-shot face-index → person-name map for the chip-grid inspector.
+    /// Replaces the previous two-query path (`fetchByPhotoId` + `fetchAll` over every
+    /// person in the DB on every cell appearance — O(photos × people) DB hits while
+    /// scrolling). Only includes confirmed (non-needs-review) labels.
+    func fetchFaceLabels(forPhotoId photoId: String) async throws -> [Int: String] {
+        try await db.dbPool.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT fe.face_index, pi.name
+                FROM face_embeddings fe
+                JOIN person_identities pi ON pi.id = fe.person_id
+                WHERE fe.photo_id = ? AND fe.needs_review = 0
+            """, arguments: [photoId])
+            var map: [Int: String] = [:]
+            for row in rows {
+                if let idx: Int = row["face_index"], let name: String = row["name"] {
+                    map[idx] = name
+                }
+            }
+            return map
+        }
+    }
+
     /// Returns the photo IDs whose faces are similar to the given feature print.
     /// Uses Apple's calibrated computeDistance metric with a tight threshold.
+    /// Results are filtered to library-committed photos — face search is a library
+    /// surface, so staged photos in open triage jobs are never returned.
     func findSimilarPhotoIds(to queryData: Data, excludingPhotoId: String? = nil) async throws -> [String] {
+        // Pre-fetch the set of library-committed photo IDs so we can filter in-loop
+        // without a per-record DB hit.
+        let libraryPhotoIds: Set<String> = try await db.dbPool.read { db in
+            let rows = try Row.fetchAll(db, sql: "SELECT id FROM photo_assets WHERE import_status = 'library'")
+            return Set(rows.map { $0["id"] as String })
+        }
+
         let all = try await fetchAll()
         var seen = Set<String>()
         var results: [String] = []
@@ -41,6 +72,8 @@ actor FaceEmbeddingRepository {
             guard let featureData = record.featureData else { continue }
             if let exclude = excludingPhotoId, record.photoId == exclude { continue }
             if seen.contains(record.photoId) { continue }
+            // Skip staged photos — face search must not surface in-flight imports.
+            if !libraryPhotoIds.contains(record.photoId) { continue }
 
             if let dist = FaceEmbeddingService.distance(queryData, featureData) {
                 distances.append((record.photoId, dist))
@@ -60,17 +93,27 @@ actor FaceEmbeddingRepository {
 
     /// Delete all face embeddings for a specific photo (e.g., after orientation correction).
     /// The next face-detection pass will re-detect faces on the corrected proxy.
+    /// Also removes the on-disk face chips for those faces so stale crops don't linger.
     func deleteByPhotoId(_ photoId: String) async throws {
+        let faceIds: [String] = try await db.dbPool.read { db in
+            let rows = try Row.fetchAll(db, sql: "SELECT id FROM face_embeddings WHERE photo_id = ?", arguments: [photoId])
+            return rows.map { $0["id"] as String }
+        }
         try await db.dbPool.write { db in
             try db.execute(sql: "DELETE FROM face_embeddings WHERE photo_id = ?", arguments: [photoId])
         }
+        FaceChipStore.deleteChips(faceIds: faceIds)
+        for id in faceIds { FaceCropCache.shared.evict(faceId: id) }
     }
 
     /// Delete all face embeddings — used when re-indexing with a new embedding format.
+    /// Wipes the on-disk chip store and the in-memory cache to match.
     func deleteAll() async throws {
         try await db.dbPool.write { db in
             try db.execute(sql: "DELETE FROM face_embeddings")
         }
+        FaceChipStore.deleteAll()
+        FaceCropCache.shared.evictAll()
         print("[FaceEmbeddingRepository] All face embeddings deleted.")
     }
 
@@ -130,20 +173,32 @@ actor FaceEmbeddingRepository {
     }
 
     /// All faces that have a confirmed person assignment (ground truth for auto-match).
+    /// Scoped to library-committed photos by default — clustering across staged + library
+    /// faces would pin staged faces to "Person N" identities that persist even after the
+    /// triage job is cancelled. The per-job people widget passes `photoIds:` instead,
+    /// which legitimately spans staged photos within a single job.
     func fetchLabeled() async throws -> [FaceEmbedding] {
         try await db.dbPool.read { db in
-            try FaceEmbedding
-                .filter(Column("person_id") != nil && Column("needs_review") == false)
-                .fetchAll(db)
+            try FaceEmbedding.fetchAll(db, sql: """
+                SELECT fe.* FROM face_embeddings fe
+                JOIN photo_assets pa ON pa.id = fe.photo_id
+                WHERE fe.person_id IS NOT NULL AND fe.needs_review = 0
+                  AND pa.import_status = 'library'
+            """)
         }
     }
 
-    /// All faces without a person assignment (candidates for auto-match).
+    /// All faces without a person assignment (candidates for auto-match / clustering).
+    /// Same library-only default as `fetchLabeled` — the AI Tools panel runs clustering
+    /// against library content only, never against in-flight imports.
     func fetchUnlabeled() async throws -> [FaceEmbedding] {
         try await db.dbPool.read { db in
-            try FaceEmbedding
-                .filter(Column("person_id") == nil)
-                .fetchAll(db)
+            try FaceEmbedding.fetchAll(db, sql: """
+                SELECT fe.* FROM face_embeddings fe
+                JOIN photo_assets pa ON pa.id = fe.photo_id
+                WHERE fe.person_id IS NULL
+                  AND pa.import_status = 'library'
+            """)
         }
     }
 
@@ -170,6 +225,8 @@ actor FaceEmbeddingRepository {
     // MARK: - Gallery join queries
 
     /// Returns faces needing Claude review, joined with photo and person info.
+    /// Filtered to library-committed photos only — staged photos (in an unfinished
+    /// triage job) aren't visible in the People gallery until their job is marked done.
     func fetchNeedsReviewGalleryRecords() async throws -> [FaceGalleryRecord] {
         try await db.dbPool.read { db in
             let rows = try Row.fetchAll(db, sql: """
@@ -178,12 +235,12 @@ actor FaceEmbeddingRepository {
                     fe.bbox_x, fe.bbox_y, fe.bbox_width, fe.bbox_height,
                     fe.feature_data, fe.created_at,
                     fe.person_id, fe.labeled_by, fe.needs_review,
-                    pa.canonical_name,
+                    pa.canonical_name, pa.file_path,
                     pi.name AS person_name
                 FROM face_embeddings fe
                 JOIN photo_assets pa ON fe.photo_id = pa.id
                 LEFT JOIN person_identities pi ON fe.person_id = pi.id
-                WHERE fe.needs_review = 1
+                WHERE fe.needs_review = 1 AND pa.import_status = 'library'
                 ORDER BY pa.canonical_name, fe.face_index
             """)
             return rows.map { Self.galleryRecord(from: $0) }
@@ -199,12 +256,12 @@ actor FaceEmbeddingRepository {
                     fe.bbox_x, fe.bbox_y, fe.bbox_width, fe.bbox_height,
                     fe.feature_data, fe.created_at,
                     fe.person_id, fe.labeled_by, fe.needs_review,
-                    pa.canonical_name,
+                    pa.canonical_name, pa.file_path,
                     pi.name AS person_name
                 FROM face_embeddings fe
                 JOIN photo_assets pa ON fe.photo_id = pa.id
                 LEFT JOIN person_identities pi ON fe.person_id = pi.id
-                WHERE fe.person_id = ? AND fe.needs_review = 0
+                WHERE fe.person_id = ? AND fe.needs_review = 0 AND pa.import_status = 'library'
                 ORDER BY pa.canonical_name, fe.face_index
                 LIMIT 3
             """, arguments: [personId])
@@ -228,12 +285,13 @@ actor FaceEmbeddingRepository {
                     fe.bbox_x, fe.bbox_y, fe.bbox_width, fe.bbox_height,
                     fe.feature_data, fe.created_at,
                     fe.person_id, fe.labeled_by, fe.needs_review,
-                    pa.canonical_name,
+                    pa.canonical_name, pa.file_path,
                     pi.name AS person_name
                 FROM face_embeddings fe
                 JOIN photo_assets pa ON fe.photo_id = pa.id
                 JOIN person_identities pi ON fe.person_id = pi.id
                 WHERE fe.person_id IS NOT NULL AND fe.needs_review = 0
+                  AND pa.import_status = 'library'
                 GROUP BY fe.person_id
                 ORDER BY pi.name ASC
             """)
@@ -242,11 +300,17 @@ actor FaceEmbeddingRepository {
     }
 
     /// Returns distinct photo IDs for all confirmed faces of a given person.
+    /// Restricted to photos that have been committed to the library — staged photos
+    /// inside an open triage job aren't returned, so "find all photos of X" never
+    /// surfaces staged content into Library / Search / Print Lab.
     func fetchPhotoIds(forPersonId personId: String) async throws -> [String] {
         try await db.dbPool.read { db in
             let rows = try Row.fetchAll(db, sql: """
-                SELECT DISTINCT photo_id FROM face_embeddings
-                WHERE person_id = ? AND needs_review = 0
+                SELECT DISTINCT fe.photo_id
+                FROM face_embeddings fe
+                JOIN photo_assets pa ON pa.id = fe.photo_id
+                WHERE fe.person_id = ? AND fe.needs_review = 0
+                  AND pa.import_status = 'library'
             """, arguments: [personId])
             return rows.map { $0["photo_id"] as String }
         }
@@ -265,11 +329,12 @@ actor FaceEmbeddingRepository {
                     fe.bbox_x, fe.bbox_y, fe.bbox_width, fe.bbox_height,
                     fe.created_at,
                     fe.person_id, fe.labeled_by, fe.needs_review,
-                    pa.canonical_name,
+                    pa.canonical_name, pa.file_path,
                     pi.name AS person_name
                 FROM face_embeddings fe
                 JOIN photo_assets pa ON fe.photo_id = pa.id
                 LEFT JOIN person_identities pi ON fe.person_id = pi.id
+                WHERE pa.import_status = 'library'
                 ORDER BY pi.name NULLS LAST, pa.canonical_name, fe.face_index
             """)
             return rows.map { Self.galleryRecord(from: $0) }
@@ -287,7 +352,7 @@ actor FaceEmbeddingRepository {
                     fe.bbox_x, fe.bbox_y, fe.bbox_width, fe.bbox_height,
                     fe.created_at,
                     fe.person_id, fe.labeled_by, fe.needs_review,
-                    pa.canonical_name,
+                    pa.canonical_name, pa.file_path,
                     pi.name AS person_name
                 FROM face_embeddings fe
                 JOIN photo_assets pa ON fe.photo_id = pa.id
@@ -331,7 +396,8 @@ actor FaceEmbeddingRepository {
         return FaceGalleryRecord(
             embedding: embedding,
             canonicalName: row["canonical_name"],
-            personName: row["person_name"]
+            personName: row["person_name"],
+            filePath: row["file_path"]
         )
     }
 }

@@ -253,7 +253,8 @@ private struct PersonCard: View {
         .task {
             guard faceImage == nil else { return }
             faceImage = await FaceCropCache.shared.crop(
-                id: record.id,
+                faceId: record.id,
+                sourceURL: record.sourceURL,
                 proxyURL: record.proxyURL,
                 bbox: record.bbox
             )

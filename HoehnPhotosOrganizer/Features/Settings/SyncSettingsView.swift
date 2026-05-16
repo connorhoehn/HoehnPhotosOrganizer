@@ -273,6 +273,7 @@ struct SyncSettingsView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .help(importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Paste deployment config text to import" : "Apply the pasted configuration")
             }
         }
         .padding(24)
@@ -305,6 +306,7 @@ struct SyncSettingsView: View {
                 Button("Sign In") { signIn() }
                     .buttonStyle(.borderedProminent)
                     .disabled(email.isEmpty || password.isEmpty || isAuthLoading)
+                    .help(isAuthLoading ? "Signing in..." : ((email.isEmpty || password.isEmpty) ? "Enter both email and password to sign in" : "Sign in with the provided credentials"))
                 if isAuthLoading {
                     ProgressView()
                         .controlSize(.small)
@@ -331,6 +333,7 @@ struct SyncSettingsView: View {
                 Button("Set Password") { setNewPassword() }
                     .buttonStyle(.borderedProminent)
                     .disabled(newPassword.isEmpty || newPassword != confirmPassword || isAuthLoading)
+                    .help(isAuthLoading ? "Setting password..." : (newPassword.isEmpty ? "Enter a new password" : (newPassword != confirmPassword ? "Passwords do not match" : "Save the new password")))
                 if isAuthLoading {
                     ProgressView()
                         .controlSize(.small)

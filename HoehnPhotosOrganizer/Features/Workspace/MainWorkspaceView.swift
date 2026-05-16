@@ -433,7 +433,7 @@ struct MainWorkspaceView: View {
         case .printLab:
             printLabView
         case .people:
-            FaceGalleryView()
+            FaceGalleryView(libraryVM: viewModel)
         case .activity:
             activityView
         case .library, .search:
@@ -858,7 +858,9 @@ struct MainWorkspaceViewMock: View {
         case .printLab:
             printLabView
         case .people:
-            FaceGalleryView()
+            // FaceGalleryView requires a real LibraryViewModel; this mock view exists
+            // only for SwiftUI previews and has no DB-backed VM available.
+            EmptyView()
         case .activity:
             activityView
         case .library, .search:
@@ -1863,7 +1865,7 @@ struct LibraryWorkspaceView: View {
             WorkflowsView(viewModel: viewModel)
 
         case .people:
-            FaceGalleryView()
+            FaceGalleryView(libraryVM: viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case .activity:

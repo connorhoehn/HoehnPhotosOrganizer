@@ -109,12 +109,22 @@ actor EmbeddingRepository {
         }
     }
 
-    /// Fetch all stored embeddings. Useful for batch similarity computations.
+    /// Fetch all stored embeddings, restricted to library-committed photos.
+    ///
+    /// Used for batch similarity ranking (text-to-image search, "find similar photos").
+    /// Staged photos in open triage jobs are excluded so similarity rankings never
+    /// surface in-flight imports into library-context search results.
     func getAllEmbeddings() async throws -> [(photoAssetId: String, vector: [Float])] {
         let pairs: [(String, String)] = try await db.dbPool.read { database -> [(String, String)] in
             let rows = try Row.fetchAll(
                 database,
-                sql: "SELECT photo_asset_id, embedding_json FROM embeddings ORDER BY created_at"
+                sql: """
+                    SELECT e.photo_asset_id, e.embedding_json
+                    FROM embeddings e
+                    JOIN photo_assets pa ON pa.id = e.photo_asset_id
+                    WHERE pa.import_status = 'library'
+                    ORDER BY e.created_at
+                """
             )
             return rows.compactMap { row -> (String, String)? in
                 guard let photoId: String = row["photo_asset_id"],

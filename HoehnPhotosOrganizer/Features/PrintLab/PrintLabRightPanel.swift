@@ -165,6 +165,7 @@ struct PrintLabRightPanel: View {
                             .frame(width: 72)
                             .disabled(img.aspectRatioLocked)
                             .foregroundStyle(img.aspectRatioLocked ? .secondary : .primary)
+                            .help(img.aspectRatioLocked ? "Unlock aspect ratio (lock icon) to edit height directly" : "Set the image height in inches")
                         }
                     }
 

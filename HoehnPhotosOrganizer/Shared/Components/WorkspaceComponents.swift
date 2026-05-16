@@ -273,7 +273,19 @@ struct PhotoCardAsset: View {
             )
         }
         .task(id: photo.updatedAt) {
-            proxyImage = await loadProxyImage()
+            // Progressive load: 300 px thumb first for instant card render, then
+            // upgrade to the full 1600 px proxy so the preview sheet has it ready.
+            // Previously every visible card decoded a 1600 px JPEG straight to NSImage
+            // — ~50 ms per card. A grid of 20 visible cards added ~1s to initial paint.
+            if let thumb = await loadThumbImage() {
+                proxyImage = thumb
+            }
+            // Full-res proxy lands shortly after for preview-quality. At card display
+            // size the swap is invisible; on `showingPreview` the preview view
+            // already has the better image.
+            if let full = await loadProxyImage() {
+                proxyImage = full
+            }
         }
         .sheet(isPresented: $showingPreview) {
             if let vm = viewModel {

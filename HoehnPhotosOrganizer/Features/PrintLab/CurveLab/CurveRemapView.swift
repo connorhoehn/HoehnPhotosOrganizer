@@ -136,6 +136,7 @@ struct CurveRemapView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.mini)
                 .disabled(viewModel.remapSourceQuad == nil)
+                .help(viewModel.remapSourceQuad == nil ? "Load a source .quad to remap" : "Reset channel mapping to identity (each channel maps to itself)")
             }
 
             if viewModel.remapSourceQuad != nil {
@@ -258,6 +259,7 @@ struct CurveRemapView: View {
         }
         .buttonStyle(.plain)
         .disabled(viewModel.remapSourceQuad == nil)
+        .help(viewModel.remapSourceQuad == nil ? "Load a source .quad to enable channel remap presets" : "Apply preset: \(label)")
     }
 
     private func swapChannels(_ a: String, _ b: String) {
@@ -461,6 +463,7 @@ struct CurveRemapView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .disabled(viewModel.remappedQuad == nil)
+            .help(viewModel.remappedQuad == nil ? "Apply a channel remap first to generate a curve" : "Save the remapped curve to a new .quad file")
 
             Button {
                 viewModel.saveRemappedQuad()
@@ -471,6 +474,7 @@ struct CurveRemapView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
             .disabled(viewModel.remappedQuad == nil)
+            .help(viewModel.remappedQuad == nil ? "Apply a channel remap first to generate a curve" : "Save the remapped curve and install it for printing")
         }
     }
 

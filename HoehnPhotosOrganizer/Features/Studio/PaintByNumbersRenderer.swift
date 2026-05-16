@@ -167,7 +167,15 @@ final class PaintByNumbersRenderer {
 
         switch displayMode {
         case .original:
-            fatalError("Handled above")
+            // Should be unreachable — the .original mode is supposed to return earlier
+            // in this function. Crashing here on a logic regression is wrong; throw so
+            // the caller can recover or show a useful error instead of taking the
+            // whole renderer down.
+            throw NSError(
+                domain: "PaintByNumbersRenderer",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Internal error: .original display mode reached the switch (should be handled by early return)"]
+            )
 
         case .colorFill:
             // Use existing threshold_map kernel for color fill (it already does exactly this)
@@ -569,7 +577,15 @@ final class PaintByNumbersRenderer {
 
         switch displayMode {
         case .original:
-            fatalError("Handled above")
+            // Should be unreachable — the .original mode is supposed to return earlier
+            // in this function. Crashing here on a logic regression is wrong; throw so
+            // the caller can recover or show a useful error instead of taking the
+            // whole renderer down.
+            throw NSError(
+                domain: "PaintByNumbersRenderer",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Internal error: .original display mode reached the switch (should be handled by early return)"]
+            )
 
         case .colorFill:
             // Color fill; dim unselected regions if selection is active
@@ -1092,7 +1108,15 @@ final class PaintByNumbersRenderer {
         let result: NSImage
         switch displayMode {
         case .colorFill, .original:
-            fatalError("Handled above")
+            // Should be unreachable — the .original mode is supposed to return earlier
+            // in this function. Crashing here on a logic regression is wrong; throw so
+            // the caller can recover or show a useful error instead of taking the
+            // whole renderer down.
+            throw NSError(
+                domain: "PaintByNumbersRenderer",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Internal error: .original display mode reached the switch (should be handled by early return)"]
+            )
 
         case .contourOnly:
             result = buildContourImage(masks: masks, settings: config.contourSettings, width: width, height: height)

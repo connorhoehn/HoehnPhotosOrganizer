@@ -377,6 +377,7 @@ struct CurveBlendView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .disabled(viewModel.blendedResult == nil)
+                    .help(viewModel.blendedResult == nil ? "Configure two curves and run a blend first" : "Save the blended curve as a new .quad file")
                 }
             }
             .padding(20)

@@ -48,8 +48,12 @@ enum LibrarySortOrder: String, CaseIterable, Identifiable {
 final class LibraryViewModel: ObservableObject {
     // MARK: - Published state
 
-    @Published var photos: [PhotoAsset] = []
-    @Published var sortOrder: LibrarySortOrder = .dateAddedNewest
+    @Published var photos: [PhotoAsset] = [] {
+        didSet { recomputeDisplayedPhotos() }
+    }
+    @Published var sortOrder: LibrarySortOrder = .dateAddedNewest {
+        didSet { recomputeDisplayedPhotos() }
+    }
     @Published var drives: [DriveDB] = []
     @Published var selectedPhotoID: String?
     @Published var searchText = ""
@@ -64,29 +68,37 @@ final class LibraryViewModel: ObservableObject {
     @Published var pendingSearchQuery: String? = nil
     /// Set by Activity feed "Open in Jobs" before routing to .jobs — picked up by JobsView.
     @Published var pendingJobSelection: String? = nil
+    @Published var jobsChangeToken: Int = 0
     @Published var studioViewModel = StudioViewModel()
 
-    /// Photos sorted per `sortOrder`. Use this in the library grid instead of `photos` directly.
-    var displayedPhotos: [PhotoAsset] {
+    /// Photos sorted per `sortOrder`. Cached — recomputed only when `photos` or
+    /// `sortOrder` changes (via the `didSet` hooks above). Previously this was a
+    /// computed property that re-sorted the entire photo array on every body
+    /// evaluation that touched it — O(N log N) per render on 10k+ libraries.
+    @Published private(set) var displayedPhotos: [PhotoAsset] = [] {
+        didSet { recomputeFilteredPhotos() }
+    }
+
+    private func recomputeDisplayedPhotos() {
         switch sortOrder {
         case .dateAddedNewest:
-            return photos.sorted { $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt > $1.createdAt }
+            displayedPhotos = photos.sorted { $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt > $1.createdAt }
         case .dateAddedOldest:
-            return photos.sorted { $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt < $1.createdAt }
+            displayedPhotos = photos.sorted { $0.createdAt == $1.createdAt ? $0.id < $1.id : $0.createdAt < $1.createdAt }
         case .pictureDateNewest:
-            return photos.sorted { lhs, rhs in
+            displayedPhotos = photos.sorted { lhs, rhs in
                 let l = lhs.dateModified ?? lhs.createdAt
                 let r = rhs.dateModified ?? rhs.createdAt
                 return l == r ? lhs.id < rhs.id : l > r
             }
         case .pictureDateOldest:
-            return photos.sorted { lhs, rhs in
+            displayedPhotos = photos.sorted { lhs, rhs in
                 let l = lhs.dateModified ?? lhs.createdAt
                 let r = rhs.dateModified ?? rhs.createdAt
                 return l == r ? lhs.id < rhs.id : l < r
             }
         case .nameAscending:
-            return photos.sorted {
+            displayedPhotos = photos.sorted {
                 let cmp = $0.canonicalName.localizedStandardCompare($1.canonicalName)
                 return cmp == .orderedSame ? $0.id < $1.id : cmp == .orderedAscending
             }
@@ -95,7 +107,9 @@ final class LibraryViewModel: ObservableObject {
 
     // MARK: - Curation state (Phase 2)
 
-    @Published var curationFilter: CurationState? = nil
+    @Published var curationFilter: CurationState? = nil {
+        didSet { recomputeFilteredPhotos() }
+    }
     @Published var selectedPhotoIDs: Set<String> = []
     @Published var workflowPhotoIDs: [String] = []
     @Published var showReviewMode = false
@@ -109,7 +123,9 @@ final class LibraryViewModel: ObservableObject {
 
     // MARK: - Search state
 
-    @Published var searchResults: [PhotoAsset] = []
+    @Published var searchResults: [PhotoAsset] = [] {
+        didSet { recomputeFilteredPhotos() }
+    }
     @Published var isSearching: Bool = false
     @Published var lastFilter: SearchFilter?
     @Published var lastIntent: SearchIntent?
@@ -157,12 +173,36 @@ final class LibraryViewModel: ObservableObject {
     /// True while ingestion is in progress.
     @Published var isIngesting: Bool = false
 
+    // MARK: - Direct-import progress (digital photo import path)
+
+    /// True from the moment the user confirms an import until the job row is in the DB.
+    /// Drives the "Importing…" banner in JobsView so the user sees immediate feedback
+    /// during the EXIF + per-file DB insert loop.
+    @Published var isImporting: Bool = false
+    /// Photos scanned so far in the current import (0…importPhotoTotal).
+    @Published var importPhotoProcessed: Int = 0
+    /// Total photos in the current import.
+    @Published var importPhotoTotal: Int = 0
+    /// ID of the in-progress import's placeholder TriageJob — set as soon as the row is
+    /// inserted, cleared when import finishes. Lets the sidebar visually tie the
+    /// "Importing…" status pill to its matching job row.
+    @Published var importingJobId: String?
+    /// Title of the in-progress import. Shown in the status pill so users can tell which
+    /// job is being populated when multiple imports queue up over time.
+    @Published var importingJobTitle: String?
+
     // MARK: - Proxy generation progress
 
     /// Current proxy generation progress. Nil when no generation is running.
     @Published var proxyProgress: ProxyGenerationProgress?
     /// True while proxy generation is in progress.
     @Published var isGeneratingProxies: Bool = false
+
+    /// Title of the job that kicked off the currently-running proxy / CLIP / face-
+    /// indexing pass. Set when `startProxyGeneration` fires (using the just-imported
+    /// job's title), cleared when face indexing finally exits. Shown in the sidebar
+    /// background-activity banner so users can tell which job each pipeline belongs to.
+    @Published var processingJobTitle: String?
 
     // MARK: - Print Lab
 
@@ -269,7 +309,13 @@ final class LibraryViewModel: ObservableObject {
         return photos.first
     }
 
-    var filteredPhotos: [PhotoAsset] {
+    /// Library grid + Studio/PrintLab/etc. all read this from inside `body`. Previously
+    /// it was a computed property that did an O(N) filter on every render — at 10k+
+    /// photos that's perceptible scroll stutter. Now cached and recomputed only when
+    /// one of its inputs (`displayedPhotos`, `searchResults`, `curationFilter`) changes.
+    @Published private(set) var filteredPhotos: [PhotoAsset] = []
+
+    private func recomputeFilteredPhotos() {
         // Smart album overrides text search (smart albums are explicit selections)
         // If search results are populated, use them; otherwise show all photos
         var result = !searchResults.isEmpty ? searchResults : displayedPhotos
@@ -282,7 +328,7 @@ final class LibraryViewModel: ObservableObject {
             result = result.filter { $0.curationState != CurationState.deleted.rawValue }
         }
 
-        return result
+        filteredPhotos = result
     }
 
     /// Header text shown when a smart album is active.
@@ -1221,8 +1267,16 @@ final class LibraryViewModel: ObservableObject {
 
         do {
             let service = ImageAdjustmentService()
-            let count = try await service.applyAdjustments(to: targetPhotos, adjustments: adjustments, db: db)
-            adjustmentResult = "Adjustments saved to \(count) photo\(count == 1 ? "" : "s")."
+            let result = try await service.applyAdjustments(to: targetPhotos, adjustments: adjustments, db: db)
+            let count = result.successCount
+            let failures = result.failures.count
+            if failures == 0 {
+                adjustmentResult = "Adjustments saved to \(count) photo\(count == 1 ? "" : "s")."
+            } else if count == 0 {
+                adjustmentResult = "All \(failures) photo\(failures == 1 ? "" : "s") failed. First error: \(result.failures.first?.error ?? "unknown")"
+            } else {
+                adjustmentResult = "Saved to \(count) of \(count + failures) photos · \(failures) failed (first: \(result.failures.first?.error ?? "unknown"))"
+            }
         } catch {
             adjustmentResult = error.localizedDescription
         }
@@ -1657,9 +1711,49 @@ final class LibraryViewModel: ObservableObject {
         let deduped = IngestionActor.deduplicateRawJpgPairs(urls)
         print("[Import] Starting import of \(deduped.count) photo(s) (from \(urls.count) files, \(urls.count - deduped.count) JPG duplicates removed)")
 
-        // Phase 1: Insert all photos into DB first, collecting assets + EXIF
+        // Flip immediate-feedback flags so JobsView can show "Importing…" banner
+        // during the EXIF + DB-insert loop, before the job row exists.
+        isImporting = true
+        importPhotoTotal = deduped.count
+        importPhotoProcessed = 0
+        defer {
+            isImporting = false
+            importPhotoProcessed = 0
+            importPhotoTotal = 0
+            importingJobId = nil
+            importingJobTitle = nil
+        }
+
+        // Create the triage job upfront with photoCount: 0 so the row appears in JobsView
+        // within ms of clicking Import. Photos link incrementally during the scan loop and
+        // the row's photo count ticks up via addPhotos' UPDATE. If no photos end up
+        // inserted (all duplicates), the empty placeholder is deleted at the end.
+        let jobRepo = TriageJobRepository(db: db)
+        let importTitle = "Import — \(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none))"
+        let importJob = TriageJob.newImportJob(title: importTitle, photoCount: 0)
+        var jobCreated = false
+        do {
+            try await jobRepo.insert(importJob)
+            jobCreated = true
+            importingJobId = importJob.id
+            importingJobTitle = importTitle
+            jobsChangeToken += 1
+            // Navigate to Jobs immediately and auto-select the new job so the user
+            // lands on the active import's detail view instead of staying on whatever
+            // section they triggered the import from.
+            selectedSection = .jobs
+            pendingJobSelection = importJob.id
+        } catch {
+            print("[Import] Failed to create placeholder job: \(error)")
+        }
+
+        // Phase 1: Insert all photos into DB first, collecting assets + EXIF.
+        // pendingJobLinkIds buffers freshly-inserted asset IDs and flushes to the job
+        // in batches so each photo isn't its own UPDATE round-trip.
         var totalProcessed = 0
         var insertedAssets: [(id: String, url: URL, rawExifJson: String?)] = []
+        var pendingJobLinkIds: [String] = []
+        let jobLinkBatchSize = 50
 
         for entry in deduped {
             let url = entry.url
@@ -1703,16 +1797,35 @@ final class LibraryViewModel: ObservableObject {
                 }
                 if wasInserted {
                     insertedAssets.append((id: asset.id, url: url, rawExifJson: asset.rawExifJson))
+                    if jobCreated {
+                        pendingJobLinkIds.append(asset.id)
+                        if pendingJobLinkIds.count >= jobLinkBatchSize {
+                            let batch = pendingJobLinkIds
+                            pendingJobLinkIds.removeAll(keepingCapacity: true)
+                            try? await jobRepo.addPhotos(jobId: importJob.id, photoIds: batch)
+                            jobsChangeToken += 1
+                        }
+                    }
                 }
             } catch {
                 print("[Import] Failed to insert \(canonicalName): \(error)")
             }
             totalProcessed += 1
+            importPhotoProcessed = totalProcessed
             onEach?(totalProcessed)
+        }
+
+        // Flush any photos buffered after the last batch flush.
+        if jobCreated && !pendingJobLinkIds.isEmpty {
+            try? await jobRepo.addPhotos(jobId: importJob.id, photoIds: pendingJobLinkIds)
         }
 
         guard !insertedAssets.isEmpty else {
             print("[Import] No new photos to import")
+            if jobCreated {
+                try? await jobRepo.delete(id: importJob.id)
+                jobsChangeToken += 1
+            }
             return
         }
 
@@ -1721,19 +1834,28 @@ final class LibraryViewModel: ObservableObject {
         let exifFailCount = insertedAssets.count - exifSuccessCount
         print("[Import] EXIF extraction: \(exifSuccessCount) succeeded, \(exifFailCount) failed out of \(insertedAssets.count) photos")
 
-        // Phase 2: Create a single import job (user can split via SplitJobSheet on-demand)
-        let jobRepo = TriageJobRepository(db: db)
-        let importTitle = "Import — \(DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none))"
-        let allImportIds = insertedAssets.map(\.id)
-        let importJob = try? await jobRepo.createImportJob(title: importTitle, photoIds: allImportIds, activityService: activityService)
-        print("[Import] Created job: \(importTitle) (\(allImportIds.count) photos)")
+        // Phase 2: finalize the job — compute readiness and emit the created-job activity.
+        // (Job row + photos are already in the DB at this point.)
+        if jobCreated {
+            try? await jobRepo.computeAndUpdateCompleteness(jobId: importJob.id)
+            if let activityService {
+                let inserted = insertedAssets.count
+                Task { try? await activityService.emitJobCreated(jobId: importJob.id, title: importTitle, photoCount: inserted) }
+            }
+        } else {
+            // Fallback: placeholder creation failed earlier — try once more via the
+            // batched helper so we don't lose the job entirely.
+            let allImportIds = insertedAssets.map(\.id)
+            _ = try? await jobRepo.createImportJob(title: importTitle, photoIds: allImportIds, activityService: activityService)
+        }
+        print("[Import] Created job: \(importTitle) (\(insertedAssets.count) photos)")
+        jobsChangeToken += 1
 
         let totalInserted = insertedAssets.count
         print("[Import] Done — \(totalInserted) new asset(s)")
         if totalInserted > 0 {
-            let batchMeta: String? = importJob.flatMap { job in
-                (try? JSONSerialization.data(withJSONObject: ["job_id": job.id])).flatMap { String(data: $0, encoding: .utf8) }
-            }
+            let batchMeta: String? = (try? JSONSerialization.data(withJSONObject: ["job_id": importJob.id]))
+                .flatMap { String(data: $0, encoding: .utf8) }
             outboxProcessor?.enqueue(
                 kind: .importBatch,
                 title: "Imported \(totalInserted) photo(s)",
@@ -1754,6 +1876,18 @@ final class LibraryViewModel: ObservableObject {
         onEach: ((Int) -> Void)? = nil
     ) async {
         print("[Import] Starting named import of \(urls.count) photo(s) as '\(jobName)'")
+
+        isImporting = true
+        importPhotoTotal = urls.count
+        importPhotoProcessed = 0
+        importingJobTitle = jobName
+        defer {
+            isImporting = false
+            importPhotoProcessed = 0
+            importPhotoTotal = 0
+            importingJobId = nil
+            importingJobTitle = nil
+        }
 
         var processed = 0
         var insertedPhotoIds: [String] = []
@@ -1797,6 +1931,7 @@ final class LibraryViewModel: ObservableObject {
                 print("[Import] Failed to insert \(canonicalName): \(error)")
             }
             processed += 1
+            importPhotoProcessed = processed
             onEach?(processed)
         }
 
@@ -1807,6 +1942,7 @@ final class LibraryViewModel: ObservableObject {
                 let job = try await jobRepo.createImportJob(title: jobName, photoIds: insertedPhotoIds, activityService: activityService)
                 createdJobId = job.id
                 print("[Import] Created job: \(job.title) — \(insertedPhotoIds.count) photos")
+                jobsChangeToken += 1
             } catch {
                 print("[Import] Failed to create triage job '\(jobName)': \(error)")
             }
@@ -1969,17 +2105,31 @@ final class LibraryViewModel: ObservableObject {
         guard !isGeneratingProxies else { return }
         isGeneratingProxies = true
         proxyProgress = nil
+        // Capture the job title now, before `importDigitalPhotos`'s defer clears it. This
+        // is the prefix the sidebar uses to label both the previews and faces banners.
+        if processingJobTitle == nil {
+            processingJobTitle = importingJobTitle
+        }
 
         let photoRepo = self.photoRepo
         let proxyRepo = self.proxyRepo
         let embeddingRepo = self.embeddingRepo
+        let capturedDb = self.db
 
         proxyGenerationTask = Task { [weak self] in
-            let actor = ProxyGenerationActor(photoRepo: photoRepo, proxyRepo: proxyRepo, embeddingRepo: embeddingRepo)
+            let actor = ProxyGenerationActor(photoRepo: photoRepo, proxyRepo: proxyRepo, embeddingRepo: embeddingRepo, appDatabase: capturedDb)
             // Collect IDs of photos processed in this batch for face indexing
             var processedPhotoIds: [String] = []
             let pending = (try? await photoRepo.fetchByProcessingState(.proxyPending)) ?? []
             processedPhotoIds = pending.map(\.id)
+
+            // Kick off face indexing IN PARALLEL with proxy generation. The indexer's
+            // poll-loop picks up photos as their proxies land in the DB — the user sees
+            // the Faces bar tick alongside the Previews bar instead of staying at 0
+            // until proxy gen completes.
+            await MainActor.run {
+                self?.startBackgroundFaceIndexing()
+            }
 
             for await progress in actor.processQueue(driveMount: driveMount, driveUUID: driveUUID) {
                 guard let self else { return }
@@ -1987,17 +2137,71 @@ final class LibraryViewModel: ObservableObject {
             }
             guard let self else { return }
             self.isGeneratingProxies = false
-
-            // Background face indexing for newly imported photos
-            if !processedPhotoIds.isEmpty {
-                self.startBackgroundFaceIndexing(photoIds: processedPhotoIds)
-            }
+            // The face indexer's poll-loop sees isGeneratingProxies = false, drains the
+            // last batch, then exits on its own. No final kick needed here.
+            _ = processedPhotoIds
         }
     }
 
     /// Index faces for photos that haven't been face-indexed yet.
     /// Called automatically after proxy generation. Skips photos where `faceIndexedAt` is already set.
     @Published var isFaceIndexing = false
+
+    /// True while the launch-time face-chip backfill is generating missing crops for
+    /// legacy `face_embeddings` rows. Surfaces in the JobsView background-activity banner.
+    @Published var isBackfillingFaceChips: Bool = false
+    @Published var faceChipBackfillProgress: (completed: Int, total: Int)? = nil
+
+    /// Launch-time maintenance pass for the face chip store.
+    ///
+    /// Two phases:
+    ///   1. **GC** — sweep `face-chips/` and delete any JPEG whose stem id is not in
+    ///      the live `face_embeddings.id` set. Frees disk after crashes or aborted
+    ///      re-indexes. Cheap (<100 ms even at 100K rows).
+    ///   2. **Backfill** — generate chips for any face row that lacks one. Bounded
+    ///      4-way concurrent. Updates `faceChipBackfillProgress` so the JobsView
+    ///      background-activity banner can show progress.
+    ///
+    /// Idempotent. Safe to call on every launch — does no work in the steady state
+    /// where every face already has a chip.
+    func runFaceChipMaintenance() async {
+        let svc = FaceChipBackfillService(db: db)
+
+        // Phase 1: GC. Fetching the set of valid IDs is one query; reuse it for
+        // both the sweep and the backfill candidate count.
+        let validIds: Set<String>
+        do {
+            validIds = try await svc.fetchAllFaceIds()
+        } catch {
+            print("[FaceChipMaintenance] Failed to fetch face ids: \(error)")
+            return
+        }
+        let removed = FaceChipStore.garbageCollectOrphans(validFaceIds: validIds)
+        if removed > 0 {
+            print("[FaceChipMaintenance] GC removed \(removed) orphan chip\(removed == 1 ? "" : "s")")
+        }
+
+        // Phase 2: Backfill. Light-touch progress channel — flag flips on if any
+        // work happens, off when done. Tuple keeps the per-tick numbers fresh.
+        isBackfillingFaceChips = true
+        faceChipBackfillProgress = nil
+        defer {
+            isBackfillingFaceChips = false
+            faceChipBackfillProgress = nil
+        }
+        do {
+            let result = try await svc.run { [weak self] completed, total in
+                Task { @MainActor [weak self] in
+                    self?.faceChipBackfillProgress = (completed, total)
+                }
+            }
+            if result.generated > 0 {
+                print("[FaceChipMaintenance] Backfilled \(result.generated) chip\(result.generated == 1 ? "" : "s")")
+            }
+        } catch {
+            print("[FaceChipMaintenance] Backfill error: \(error)")
+        }
+    }
 
     func startBackgroundFaceIndexing(photoIds: [String]? = nil) {
         guard !isFaceIndexing else { return }
@@ -2008,36 +2212,54 @@ final class LibraryViewModel: ObservableObject {
         let capturedDb = self.db
 
         Task { [weak self] in
-            let faceRepo = FaceEmbeddingRepository(db: capturedDb)
-
-            // If specific IDs given, filter to those that haven't been indexed.
-            // Otherwise, pick up all proxyReady photos missing faceIndexedAt.
-            let photosToIndex: [PhotoAsset]
-            if let ids = photoIds {
-                let fetched = (try? await photoRepo.fetchByIds(ids)) ?? []
-                photosToIndex = fetched.filter { $0.faceIndexedAt == nil }
-            } else {
-                photosToIndex = (try? await photoRepo.fetchNeedingFaceIndex()) ?? []
-            }
-
-            guard !photosToIndex.isEmpty else {
-                await MainActor.run {
-                    self?.faceIndexingProgress = ""
-                    self?.isFaceIndexing = false
-                }
-                return
-            }
+            // Single batcher for the whole run — each photo's (1 + face_count) writes coalesce
+            // into batched transactions instead of one fsync per face.
+            let batcher = PhotoProcessingBatcher(db: capturedDb)
 
             var indexed = 0
-            let total = photosToIndex.count
+            // Outer poll-loop: keeps the indexer alive while proxy generation streams new
+            // photos into `proxy_ready` state. The Faces bar in the per-job processing
+            // panel ticks up alongside Previews instead of being stuck at 0 until proxy
+            // gen completes. Exits when there's nothing pending AND proxy gen has finished.
+            outer: while !Task.isCancelled {
+                let photosToIndex: [PhotoAsset]
+                if let ids = photoIds, indexed == 0 {
+                    // Caller pre-specified a set on the first pass only. Subsequent passes
+                    // always fall back to fetchNeedingFaceIndex so newly proxy-ready photos
+                    // get picked up. `includingStaged: true` is critical here — face
+                    // indexing runs on freshly-imported staged photos so chips and
+                    // embeddings are ready the instant the job commits.
+                    let fetched = (try? await photoRepo.fetchByIds(ids, includingStaged: true)) ?? []
+                    photosToIndex = fetched.filter { $0.faceIndexedAt == nil }
+                } else {
+                    // Small per-pass batch + freshest-first ordering. When two imports are
+                    // running back-to-back, the second batch's newly-proxy-ready photos
+                    // get picked up within ~one batch instead of waiting in FIFO order
+                    // behind the first job's entire queue.
+                    photosToIndex = (try? await photoRepo.fetchNeedingFaceIndex(limit: 25)) ?? []
+                }
 
-            for photo in photosToIndex {
+                if photosToIndex.isEmpty {
+                    // No more work right now. If proxy gen is still feeding the queue, wait
+                    // a beat and check again. If it's done, we're done too.
+                    let stillGenerating = await MainActor.run { self?.isGeneratingProxies ?? false }
+                    if stillGenerating {
+                        try? await Task.sleep(for: .milliseconds(750))
+                        continue
+                    }
+                    break outer
+                }
+
+                // Total is best-effort — recomputed each pass for the progress label.
+                let total = photosToIndex.count
+
+                for photo in photosToIndex {
                 let baseName = (photo.canonicalName as NSString).deletingPathExtension
                 let proxyURL = ProxyGenerationActor.proxiesDirectory()
                     .appendingPathComponent(baseName + ".jpg")
                 guard FileManager.default.fileExists(atPath: proxyURL.path) else {
                     // Mark as indexed even if proxy missing — avoids retrying forever
-                    try? await photoRepo.markFaceIndexed(id: photo.id)
+                    try? await batcher.appendFaceEmbeddings([], faceIndexedPhotoId: photo.id)
                     continue
                 }
 
@@ -2046,12 +2268,15 @@ final class LibraryViewModel: ObservableObject {
                 }.value
 
                 let now = ISO8601DateFormatter().string(from: Date())
+                let sourceURL: URL? = photo.filePath.isEmpty ? nil : URL(fileURLWithPath: photo.filePath)
+                var faceRecords: [FaceEmbedding] = []
                 for (index, pair) in crops.enumerated() {
                     let (cropImage, bbox) = pair
                     guard let cgImage = cropImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
                           let featureData = FaceEmbeddingService.generateFeaturePrint(for: cgImage) else { continue }
-                    let record = FaceEmbedding(
-                        id: UUID().uuidString,
+                    let faceId = UUID().uuidString
+                    faceRecords.append(FaceEmbedding(
+                        id: faceId,
                         photoId: photo.id,
                         faceIndex: index,
                         bboxX: bbox.minX, bboxY: bbox.minY, bboxWidth: bbox.width, bboxHeight: bbox.height,
@@ -2060,12 +2285,23 @@ final class LibraryViewModel: ObservableObject {
                         personId: nil,
                         labeledBy: nil,
                         needsReview: false
+                    ))
+
+                    // Eagerly persist a high-resolution chip from the original source while
+                    // the bbox is already in hand. The cache will see it on first display
+                    // without paying decode + crop. Falls back to the proxy when the source
+                    // file is unavailable (e.g. unmounted external drive).
+                    _ = FaceChipStore.generateChip(
+                        faceId: faceId,
+                        sourceURL: sourceURL,
+                        proxyURL: proxyURL,
+                        bbox: bbox
                     )
-                    try? await faceRepo.upsert(record)
                 }
 
-                // Stamp faceIndexedAt so this photo is skipped on future runs
-                try? await photoRepo.markFaceIndexed(id: photo.id)
+                // One batched append per photo — buffered face embeddings + face_indexed_at
+                // stamp go out together when the batcher hits its threshold.
+                try? await batcher.appendFaceEmbeddings(faceRecords, faceIndexedPhotoId: photo.id)
 
                 // Emit activity event for face detection results
                 if !crops.isEmpty, let svc = await self?.activityService {
@@ -2078,15 +2314,32 @@ final class LibraryViewModel: ObservableObject {
 
                 indexed += 1
                 await MainActor.run {
-                    self?.faceIndexingProgress = "Detecting faces… \(indexed)/\(total)"
+                    // Just the running count — `total` here is the current per-pass
+                    // batch size (capped at 25 by fetchNeedingFaceIndex(limit:)), not
+                    // a meaningful denominator. Showing "33 of 3" is misleading; the
+                    // per-job processing panel has the proper "X of N" view.
+                    self?.faceIndexingProgress = "\(indexed) processed"
                 }
-            }
+                }   // end for photo
+
+                // Flush between outer passes so the per-job UI poll sees this batch's
+                // face_indexed_at stamps and embedding rows before the next iteration
+                // tries to fetchNeedingFaceIndex (which would otherwise re-pick them up).
+                try? await batcher.flush()
+            }   // end outer while
+
+            // Commit any trailing batched writes before flipping isFaceIndexing off — otherwise
+            // the JobsView per-job poll could read 0 faces for photos we just processed.
+            try? await batcher.flush()
 
             await MainActor.run {
-                self?.faceIndexingProgress = indexed > 0 ? "Face detection complete — \(indexed) photos scanned" : ""
+                self?.faceIndexingProgress = ""
                 self?.isFaceIndexing = false
+                // Face indexing is the terminal pipeline; clear the job-title label so
+                // the sidebar banner doesn't keep showing the previous import's name.
+                self?.processingJobTitle = nil
             }
-            print("[FaceIndex] Background indexing complete — \(indexed)/\(total) photos scanned")
+            print("[FaceIndex] Background indexing complete — \(indexed) photos scanned")
         }
     }
 

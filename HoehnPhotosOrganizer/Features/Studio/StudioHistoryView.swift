@@ -671,6 +671,7 @@ struct StudioHistoryView: View {
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .disabled(displayedVersions.count < 2)
+                            .help(displayedVersions.count < 2 ? "Save at least 2 versions to compare" : "Compare this version side-by-side with another")
                         }
                     }
 

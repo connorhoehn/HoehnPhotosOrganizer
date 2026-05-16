@@ -108,7 +108,12 @@ actor LineageRepository {
                 arguments: [photoId]
             )
             guard let parentId: String = row?["parent_photo_id"] else { return nil }
-            return try PhotoAsset.fetchOne(db, key: parentId)
+            // Lineage is rendered in library-context inspectors; a staged parent in an
+            // open triage job shouldn't appear when the user is looking at a library child.
+            return try PhotoAsset
+                .filter(Column("id") == parentId)
+                .filter(Column("import_status") == "library")
+                .fetchOne(db)
         }
     }
 
@@ -147,6 +152,7 @@ actor LineageRepository {
             let sql = """
                 SELECT * FROM photo_assets
                 WHERE id IN (\(placeholders))
+                  AND import_status = 'library'
                 ORDER BY canonical_name ASC
             """
             return try PhotoAsset.fetchAll(db, sql: sql, arguments: StatementArguments(siblingIds))
@@ -175,6 +181,7 @@ actor LineageRepository {
             let sql = """
                 SELECT * FROM photo_assets
                 WHERE id IN (\(placeholders))
+                  AND import_status = 'library'
                 ORDER BY canonical_name ASC
             """
             return try PhotoAsset.fetchAll(db, sql: sql, arguments: StatementArguments(childIds))

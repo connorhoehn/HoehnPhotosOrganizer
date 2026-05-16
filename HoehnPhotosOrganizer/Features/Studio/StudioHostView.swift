@@ -30,6 +30,10 @@ struct StudioHostView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // Centralized transient status overlay — render/export/save failures
+        // and success confirmations from StudioViewModel surface here instead
+        // of each subview reinventing its own toast.
+        .statusBanner(message: $viewModel.statusBanner)
         .onAppear {
             if let db = appDatabase {
                 viewModel.configure(db: db)

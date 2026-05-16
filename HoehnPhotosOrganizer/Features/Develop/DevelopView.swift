@@ -88,12 +88,43 @@ struct DevelopView: View {
     private static let visionMaskService = AppleVisionMaskService()
 
     // Preview
+    /// Full-resolution base (matches the proxy native size, ~1600 px). Used for the
+    /// quality preview rendered after the user stops interacting.
     @State private var previewBaseCG: CGImage? = nil
+    /// Half-resolution base (~800 px). Used during interactive slider drags so each
+    /// rebuild finishes faster — Lightroom's "fast preview while dragging" pattern.
+    @State private var previewBaseCGFast: CGImage? = nil
     @State private var previewImage: NSImage? = nil
     @State private var previewTrigger: Int = 0
     @State private var debounceTask: Task<Void, Never>? = nil
     @State private var showingOriginal = false
     private static let ciContext = CIContext(options: [.useSoftwareRenderer: false, .cacheIntermediates: true])
+
+    /// Process-wide cache of preloaded proxy NSImages keyed by `photoId`. After each
+    /// `loadImage()` lands, a low-priority background task preloads the photos
+    /// adjacent in `developPhotos` so left/right arrow navigation reads from RAM
+    /// instead of decoding the 1600 px JPEG from disk (~5 ms vs ~50 ms).
+    /// Capped small — only the current ± 1 window matters; older entries get
+    /// evicted as the user moves through the carousel.
+    private static let proxyPreloadCache: NSCache<NSString, NSImage> = {
+        let c = NSCache<NSString, NSImage>()
+        c.countLimit = 6   // current + 2 directions × 2 photos deep
+        return c
+    }()
+    @State private var prefetchTask: Task<Void, Never>? = nil
+
+    /// Timestamp of the most recent slider/mask edit. Used by `rebuildPreview` to
+    /// pick the fast vs full base, and by the idle-upgrade task to schedule a
+    /// quality pass after the user stops dragging.
+    @State private var lastInteractionAt: Date = .distantPast
+    /// Schedules a follow-up high-quality rebuild ~250 ms after the last edit.
+    /// Cancelled and rescheduled on every `nudgePreview`.
+    @State private var qualityUpgradeTask: Task<Void, Never>? = nil
+
+    /// How long after the last edit before we upgrade to the full-res base.
+    /// 220 ms is below Lightroom's perceived "settled" threshold but long enough
+    /// that mid-drag rebuilds don't spuriously trigger a slow HQ pass.
+    private static let qualityUpgradeIdleMs: UInt64 = 220
 
     // Tone curve
     @State private var curvePoints: [CurvePoint] = []
@@ -123,8 +154,16 @@ struct DevelopView: View {
     @State private var loadError: String? = nil
 
     // In-memory undo/redo stacks (cleared on photo change)
-    @State private var undoStack: [PhotoAdjustments] = []
-    @State private var redoStack: [PhotoAdjustments] = []
+    /// Bundles both the slider state (`PhotoAdjustments`) and the mask layer set
+    /// so a single Undo restores everything the user could have changed. Previously
+    /// the stack held only `PhotoAdjustments`; mask add/remove/edit was completely
+    /// outside the undo system — the audit flagged this as a major data-loss path.
+    struct DevelopUndoSnapshot {
+        let adjustments: PhotoAdjustments
+        let masks: [AdjustmentLayer]
+    }
+    @State private var undoStack: [DevelopUndoSnapshot] = []
+    @State private var redoStack: [DevelopUndoSnapshot] = []
 
     private var canUndo: Bool { !undoStack.isEmpty }
     private var canRedo: Bool { !redoStack.isEmpty }
@@ -234,11 +273,23 @@ struct DevelopView: View {
             loadError = nil
             undoStack.removeAll()
             redoStack.removeAll()
-            await loadImage()
-            await loadAdjustmentsFromDB()
-            await loadMasksFromDB()
-            await loadPhotoContext()
-            await loadVersionSnapshots()
+
+            // Phase 1: adjustments + masks first (tiny DB reads in parallel). Must
+            // complete before the image load so loadImage()'s terminal nudgePreview()
+            // fires with the correct slider values — otherwise the first preview
+            // rebuild uses defaults and gets overwritten as sliders settle.
+            async let adj: Void = loadAdjustmentsFromDB()
+            async let masks: Void = loadMasksFromDB()
+            _ = await (adj, masks)
+
+            // Phase 2: image, photo context, and version snapshots in parallel.
+            // The previous sequential chain made carousel cycling feel sluggish —
+            // version-snapshots and photo-context don't depend on the image, so
+            // they shouldn't block it from rendering.
+            async let img: Void = loadImage()
+            async let ctx: Void = loadPhotoContext()
+            async let snaps: Void = loadVersionSnapshots()
+            _ = await (img, ctx, snaps)
         }
         .task(id: previewTrigger) { await rebuildPreview() }
         .onChange(of: adj) { nudgePreview() }
@@ -381,10 +432,9 @@ struct DevelopView: View {
 
             Divider().frame(height: 20)
 
-            // Save Version button
+            // Save Version button — one-click snapshot with auto-incrementing label.
             Button {
-                versionLabelInput = ""
-                showSaveVersionSheet = true
+                Task { await saveVersionCheckpoint(label: nextVersionLabel()) }
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "camera.fill")
@@ -548,7 +598,16 @@ struct DevelopView: View {
                             .padding(.bottom, 24)
                     }
                     .transition(.opacity)
-                    .onAppear { Task { try? await Task.sleep(for: .seconds(2)); withAnimation { saveMessage = nil } } }
+                    .onAppear {
+                        // Explicit MainActor hop after the sleep avoids the
+                        // "Publishing changes from within view updates" warning that
+                        // surfaces when @Published state is mutated from a Task
+                        // resuming on an unknown executor.
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(2))
+                            withAnimation { saveMessage = nil }
+                        }
+                    }
                 }
 
                 // Load error banner
@@ -789,6 +848,7 @@ struct DevelopView: View {
                 MaskAdjustmentPanel(
                     layer: $maskLayers[idx],
                     onDelete: {
+                        captureUndoSnapshot()
                         maskLayers.remove(at: idx)
                         selectedMaskId = nil
                         nudgePreview()
@@ -1294,8 +1354,9 @@ struct DevelopView: View {
                 Text("Versions").font(.subheadline.weight(.semibold))
                 Spacer()
                 Button {
-                    versionLabelInput = ""
-                    showSaveVersionSheet = true
+                    // Skip the prompt — just snapshot with an auto-incremented label.
+                    // The user can Rename later via context menu if they want.
+                    Task { await saveVersionCheckpoint(label: nextVersionLabel()) }
                 } label: {
                     Image(systemName: "plus.circle").font(.caption)
                 }
@@ -1369,17 +1430,6 @@ struct DevelopView: View {
                     }
 
                     Spacer()
-
-                    if !isCurrent {
-                        Button {
-                            restoreConfirmSnapshot = snapshot
-                        } label: {
-                            Image(systemName: "arrow.uturn.backward")
-                                .font(.caption2)
-                        }
-                        .buttonStyle(.borderless)
-                        .help("Restore this version")
-                    }
                 }
 
                 // Adjustment summary
@@ -1396,15 +1446,18 @@ struct DevelopView: View {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(isCurrent ? Color.accentColor.opacity(0.08) : Color.clear)
         )
+        .contentShape(Rectangle())
+        // Click anywhere on the row to immediately restore that version's adjustments
+        // to the develop canvas. No confirmation — the user can re-click the current
+        // version (or any other) to undo. Live A/B comparison via successive clicks.
+        .onTapGesture {
+            guard !isCurrent else { return }
+            Task { await restoreVersion(snapshot) }
+        }
         .contextMenu {
             Button("Rename...") {
                 renameLabelInput = snapshot.label ?? ""
                 renameTarget = snapshot
-            }
-            if !isCurrent {
-                Button("Restore") {
-                    restoreConfirmSnapshot = snapshot
-                }
             }
             Divider()
             Button("Delete", role: .destructive) {
@@ -1499,6 +1552,7 @@ struct DevelopView: View {
             HStack(spacing: 6) {
                 // Add Layer
                 Button {
+                    captureUndoSnapshot()
                     let layer = AdjustmentLayer(label: "Layer \(maskLayers.count + 1)")
                     maskLayers.append(layer)
                     selectedMaskId = layer.id
@@ -1573,7 +1627,7 @@ struct DevelopView: View {
                              isSelected: maskLayers[i].id == selectedMaskId,
                              isActive: $maskLayers[i].isActive,
                              onSelect: { selectedMaskId = maskLayers[i].id },
-                             onDelete: { maskLayers.remove(at: i); selectedMaskId = nil; nudgePreview(); Task { await persistToDB() } })
+                             onDelete: { captureUndoSnapshot(); maskLayers.remove(at: i); selectedMaskId = nil; nudgePreview(); Task { await persistToDB() } })
                     .onChange(of: maskLayers[i].isActive) { nudgePreview() }
             }
 
@@ -1582,6 +1636,7 @@ struct DevelopView: View {
                 Text("Detected").font(.caption2).foregroundStyle(.tertiary)
                 ForEach(autoSegments) { seg in
                     Button {
+                        captureUndoSnapshot()
                         let layer = AdjustmentLayer(
                             label: seg.label,
                             sources: [MaskSource(sourceType: .bitmap(rle: Data(seg.maskPixels), width: seg.width, height: seg.height))]
@@ -1718,15 +1773,45 @@ struct DevelopView: View {
             } else { nil }
             let sourceURL = URL(fileURLWithPath: photo.filePath)
 
+            // Cache hit avoids the decode entirely — the prefetch task at the end of
+            // the previous loadImage may have already loaded this photo.
+            if let cached = Self.proxyPreloadCache.object(forKey: photo.id as NSString) {
+                displayImage = cached
+                previewImage = nil
+                if let cg = cached.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    let (full, fast) = await Task.detached(priority: .userInitiated) {
+                        () -> (CGImage?, CGImage?) in
+                        let full = Self.scale(cg, maxEdge: 1600) ?? cg
+                        let fast = Self.scale(full, maxEdge: 800) ?? full
+                        return (full, fast)
+                    }.value
+                    previewBaseCG = full
+                    previewBaseCGFast = fast
+                }
+                nudgePreview()
+                schedulePrefetch()
+                return
+            }
+
             let img = await Task.detached(priority: .userInitiated) { () -> NSImage? in
-                if let origPath = originalPath, let origImg = NSImage(contentsOfFile: origPath) { return origImg }
+                // Proxy first — it's the 1600 px derivative we already generated for
+                // exactly this purpose, and it loads in ~20ms instead of the 1-2s a
+                // raw original file decode takes on big DNG/CR3. The carousel feels
+                // sluggish on big libraries when we re-decode the source on every
+                // nav. Original is only attempted as a fallback when the proxy is
+                // missing (e.g. legacy photos imported before proxy generation).
                 if let proxy = NSImage(contentsOf: proxyURL) { return proxy }
+                if let origPath = originalPath, let origImg = NSImage(contentsOfFile: origPath) { return origImg }
                 let opts: CFDictionary? = sourceURL.pathExtension.lowercased() == "dng"
                     ? [kCGImageSourceTypeIdentifierHint: UTType.tiff.identifier] as CFDictionary : nil
                 guard let src = CGImageSourceCreateWithURL(sourceURL as CFURL, opts),
                       let cg = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return nil }
                 return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
             }.value
+
+            // Stash for cache hits on near-future nav (current photo + prefetched
+            // neighbors). Skipped if decode failed.
+            if let img { Self.proxyPreloadCache.setObject(img, forKey: photo.id as NSString) }
 
             if img == nil {
                 loadError = "Could not load image for \(photo.canonicalName)"
@@ -1735,9 +1820,56 @@ struct DevelopView: View {
             displayImage = img
             previewImage = nil
             if let cg = img?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                previewBaseCG = await Task.detached(priority: .userInitiated) { Self.scale(cg, maxEdge: 800) ?? cg }.value
+                // Two bases — Lightroom-style:
+                //   • Full (1600 px): matches the proxy resolution, used for the
+                //     quality preview after the user settles. No visible quality drop
+                //     when the rebuild replaces `displayImage`.
+                //   • Fast (800 px): used during interactive slider drags so the
+                //     CIFilter chain finishes 4× faster per update. Drag feels snappy
+                //     even on big edits; HQ rebuild follows automatically when the
+                //     user pauses.
+                let (full, fast) = await Task.detached(priority: .userInitiated) {
+                    () -> (CGImage?, CGImage?) in
+                    let full = Self.scale(cg, maxEdge: 1600) ?? cg
+                    let fast = Self.scale(full, maxEdge: 800) ?? full
+                    return (full, fast)
+                }.value
+                previewBaseCG = full
+                previewBaseCGFast = fast
             }
             nudgePreview()
+            schedulePrefetch()
+        }
+    }
+
+    /// Preload proxies for the photos adjacent to `currentPhoto` in `developPhotos`
+    /// into `Self.proxyPreloadCache`. Runs at `.utility` priority so it doesn't
+    /// fight foreground work. The cache window is small (NSCache.countLimit = 6)
+    /// so we never pin more than a couple of MB of NSImages even on huge carousels.
+    /// Cancelled and rescheduled on every photo change.
+    private func schedulePrefetch() {
+        prefetchTask?.cancel()
+        guard let idx = currentIndex else { return }
+        // Capture photo IDs/paths so the task doesn't have to touch view state.
+        var targets: [(id: String, url: URL)] = []
+        for delta in [1, -1, 2, -2] {
+            let n = idx + delta
+            guard n >= 0, n < developPhotos.count else { continue }
+            let p = developPhotos[n]
+            // Skip if already cached.
+            if Self.proxyPreloadCache.object(forKey: p.id as NSString) != nil { continue }
+            let baseName = (p.canonicalName as NSString).deletingPathExtension
+            let url = ProxyGenerationActor.proxiesDirectory().appendingPathComponent(baseName + ".jpg")
+            targets.append((p.id, url))
+        }
+        guard !targets.isEmpty else { return }
+        prefetchTask = Task.detached(priority: .utility) {
+            for t in targets {
+                if Task.isCancelled { return }
+                guard FileManager.default.fileExists(atPath: t.url.path),
+                      let img = NSImage(contentsOf: t.url) else { continue }
+                Self.proxyPreloadCache.setObject(img, forKey: t.id as NSString)
+            }
         }
     }
 
@@ -1810,8 +1942,14 @@ struct DevelopView: View {
 
     /// Call this immediately before making a programmatic adjustment change (auto-level, restore, etc.)
     /// so the previous state can be recovered via the Undo button.
+    /// Captures BOTH the slider state and the mask layers — adding/removing a mask
+    /// is now part of the undo history.
     private func captureUndoSnapshot() {
-        undoStack.append(currentAdjustments())
+        let snapshot = DevelopUndoSnapshot(
+            adjustments: currentAdjustments(),
+            masks: maskLayers
+        )
+        undoStack.append(snapshot)
         // Limit stack depth to avoid unbounded growth
         if undoStack.count > 50 { undoStack.removeFirst() }
         redoStack.removeAll()
@@ -1832,16 +1970,27 @@ struct DevelopView: View {
         nudgePreview()
     }
 
+    /// Restores both slider state and mask state from a snapshot. The mask binding
+    /// gets a fresh assignment (selection cleared since the snapshot's masks may not
+    /// contain the previously-selected id), then `nudgePreview()` rebuilds the canvas.
+    private func applySnapshot(_ s: DevelopUndoSnapshot) {
+        applyAdjustments(s.adjustments)
+        maskLayers = s.masks
+        selectedMaskId = nil
+        showMaskOverlay = !s.masks.isEmpty
+        nudgePreview()
+    }
+
     private func performUndo() {
         guard let previous = undoStack.popLast() else { return }
-        redoStack.append(currentAdjustments())
-        applyAdjustments(previous)
+        redoStack.append(DevelopUndoSnapshot(adjustments: currentAdjustments(), masks: maskLayers))
+        applySnapshot(previous)
     }
 
     private func performRedo() {
         guard let next = redoStack.popLast() else { return }
-        undoStack.append(currentAdjustments())
-        applyAdjustments(next)
+        undoStack.append(DevelopUndoSnapshot(adjustments: currentAdjustments(), masks: maskLayers))
+        applySnapshot(next)
     }
 
     // MARK: - Version Checkpoints
@@ -1852,6 +2001,18 @@ struct DevelopView: View {
         }
         let repo = AdjustmentSnapshotRepository(db: db)
         versionSnapshots = (try? await repo.fetchSnapshots(forPhoto: photoId)) ?? []
+    }
+
+    /// Returns the next sensible auto-generated label like "Version 1", "Version 2"…
+    /// based on the highest existing `Version N` in the snapshot list. Existing
+    /// user-renamed labels are ignored so the sequence stays predictable.
+    private func nextVersionLabel() -> String {
+        let pattern = /^Version (\d+)$/
+        let maxN = versionSnapshots
+            .compactMap { $0.label?.wholeMatch(of: pattern) }
+            .compactMap { Int($0.output.1) }
+            .max() ?? 0
+        return "Version \(maxN + 1)"
     }
 
     private func saveVersionCheckpoint(label: String) async {
@@ -1882,17 +2043,29 @@ struct DevelopView: View {
             createdAt: Date()
         )
         let repo = AdjustmentSnapshotRepository(db: db)
-        try? await repo.saveSnapshot(snapshot)
+        do {
+            try await repo.saveSnapshot(snapshot)
+        } catch {
+            // Surface the failure instead of silently lying about a successful save.
+            withAnimation { saveMessage = "Save failed: \(error.localizedDescription)" }
+            print("[DevelopView] saveSnapshot failed: \(error)")
+            return
+        }
         await loadVersionSnapshots()
 
-        // Emit activity event
+        // Activity event emit is best-effort — failure shouldn't undo the save the user
+        // just saw succeed. Log but don't surface a misleading error.
         if let activityEventService {
             let versionNumber = versionSnapshots.count
-            try? await activityEventService.emitVersionCreated(
-                photoAssetId: photo.id,
-                versionName: label,
-                versionNumber: versionNumber
-            )
+            do {
+                try await activityEventService.emitVersionCreated(
+                    photoAssetId: photo.id,
+                    versionName: label,
+                    versionNumber: versionNumber
+                )
+            } catch {
+                print("[DevelopView] emitVersionCreated failed (non-fatal): \(error)")
+            }
         }
 
         withAnimation { saveMessage = "Version saved: \(label)" }
@@ -1943,7 +2116,13 @@ struct DevelopView: View {
             createdAt: Date()
         )
         let repo = AdjustmentSnapshotRepository(db: db)
-        try? await repo.saveSnapshot(restoredSnapshot)
+        do {
+            try await repo.saveSnapshot(restoredSnapshot)
+        } catch {
+            withAnimation { saveMessage = "Restore failed: \(error.localizedDescription)" }
+            print("[DevelopView] restore saveSnapshot failed: \(error)")
+            return
+        }
 
         // Persist to photo_assets
         await persistToDB()
@@ -1954,28 +2133,59 @@ struct DevelopView: View {
     private func deleteVersion(_ snapshot: AdjustmentSnapshot) async {
         guard let db = appDatabase else { return }
         let repo = AdjustmentSnapshotRepository(db: db)
-        let deleted = try? await repo.deleteSnapshot(id: snapshot.id)
-        // Clean up thumbnail file from disk
-        SnapshotThumbnailService.deleteThumbnail(atPath: deleted?.thumbnailPath)
-        await loadVersionSnapshots()
+        do {
+            let deleted = try await repo.deleteSnapshot(id: snapshot.id)
+            SnapshotThumbnailService.deleteThumbnail(atPath: deleted?.thumbnailPath)
+            await loadVersionSnapshots()
+        } catch {
+            withAnimation { saveMessage = "Delete failed: \(error.localizedDescription)" }
+            print("[DevelopView] deleteSnapshot failed: \(error)")
+        }
     }
 
     private func renameVersion(_ snapshot: AdjustmentSnapshot, newLabel: String) async {
         guard let db = appDatabase else { return }
         let repo = AdjustmentSnapshotRepository(db: db)
-        try? await repo.renameSnapshot(id: snapshot.id, newLabel: newLabel)
-        await loadVersionSnapshots()
+        do {
+            try await repo.renameSnapshot(id: snapshot.id, newLabel: newLabel)
+            await loadVersionSnapshots()
+        } catch {
+            withAnimation { saveMessage = "Rename failed: \(error.localizedDescription)" }
+            print("[DevelopView] renameSnapshot failed: \(error)")
+        }
     }
 
     // MARK: - Preview Pipeline
 
     private func nudgePreview() {
+        // Record the edit moment — `rebuildPreview` uses this to pick the fast vs
+        // full base. Within 220 ms of an edit we're "interactive" → 800 px base.
+        // After 220 ms of silence the scheduled qualityUpgradeTask fires a final
+        // rebuild against the 1600 px base.
+        lastInteractionAt = Date()
         debounceTask?.cancel()
-        debounceTask = Task {
-            try? await Task.sleep(for: .milliseconds(30))
+        previewTrigger &+= 1
+
+        // Cancel any pending HQ upgrade and reschedule. As long as edits keep
+        // arriving, this never fires; the moment the user pauses for ~220 ms it
+        // triggers one final pass at full resolution.
+        qualityUpgradeTask?.cancel()
+        qualityUpgradeTask = Task { [self] in
+            try? await Task.sleep(nanoseconds: Self.qualityUpgradeIdleMs * 1_000_000)
             guard !Task.isCancelled else { return }
-            previewTrigger &+= 1
+            await MainActor.run {
+                // Setting the timestamp far in the past makes `rebuildPreview` choose
+                // the full base on this bump, without flipping any other UI state.
+                lastInteractionAt = .distantPast
+                previewTrigger &+= 1
+            }
         }
+    }
+
+    /// Whether the user has touched a slider/mask in the last `qualityUpgradeIdleMs`.
+    /// `rebuildPreview` reads this to choose its base CGImage.
+    private var isInteractingNow: Bool {
+        Date().timeIntervalSince(lastInteractionAt) * 1000 < Double(Self.qualityUpgradeIdleMs)
     }
 
     // MARK: - Auto Adjust
@@ -2096,7 +2306,13 @@ struct DevelopView: View {
     }
 
     private func rebuildPreview() async {
-        guard let cgSrc = previewBaseCG else { return }
+        // Fast base while the user is actively dragging — CIFilter chain on 800 px
+        // runs ~4× faster than 1600 px, making the preview track the cursor in real
+        // time. Falls back to the full base outside the interaction window so the
+        // settled image is full-quality. When the fast base is missing (legacy load
+        // path) we just use the full one.
+        let interactiveBase = isInteractingNow ? (previewBaseCGFast ?? previewBaseCG) : previewBaseCG
+        guard let cgSrc = interactiveBase else { return }
         let capExp = exposure, capCon = contrast, capHi = highlights
         let capSh = shadows, capWh = whites, capBl = blacks, capSat = saturation
         let capVib = vibrance
@@ -2227,6 +2443,10 @@ struct DevelopView: View {
     }
 
     private func resetAll() {
+        // Capture BEFORE the destructive reset — without this the user can't recover
+        // their entire edit history from a single accidental tap on Reset. Audit
+        // flagged this as the highest-severity undo gap.
+        captureUndoSnapshot()
         resetSliders(); maskLayers.removeAll(); selectedMaskId = nil
         autoSegments.removeAll(); showMaskOverlay = false; nudgePreview()
         Task { await persistToDB() }

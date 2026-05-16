@@ -920,6 +920,40 @@ final class AppDatabase: Sendable {
             print("[v35_fts5_search] Migration applied — photo_assets_fts virtual table + 3 triggers created")
         }
 
+        migrator.registerMigration("v36_triage_job_phase_timestamps") { db in
+            try db.execute(sql: "ALTER TABLE triage_jobs ADD COLUMN triage_completed_at DATETIME")
+            try db.execute(sql: "ALTER TABLE triage_jobs ADD COLUMN develop_completed_at DATETIME")
+            print("[v36_triage_job_phase_timestamps] Migration applied — triage_completed_at, develop_completed_at added to triage_jobs")
+        }
+
+        // v37: Performance indexes for slow code paths surfaced by the audit.
+        //
+        //   1. triage_job_photos.job_id — every per-job photo fetch (filmstrip, count,
+        //      completeness compute, processing panel) joined on job_id without an
+        //      index, forcing full-table scans as triage_job_photos grows past a few
+        //      hundred rows. v26 created the inverse index on photo_id but missed
+        //      this direction.
+        //
+        //   2. face_embeddings(photo_id, person_id) — every FaceGalleryRecord query
+        //      joins photo_assets and groups/filters by person_id. The existing
+        //      single-column indexes work but a composite makes the People-page join
+        //      cover both columns without a row lookup.
+        migrator.registerMigration("v37_audit_indexes") { db in
+            try db.create(
+                index: "idx_triage_job_photos_job_id",
+                on: "triage_job_photos",
+                columns: ["job_id"],
+                ifNotExists: true
+            )
+            try db.create(
+                index: "idx_face_embeddings_photo_person",
+                on: "face_embeddings",
+                columns: ["photo_id", "person_id"],
+                ifNotExists: true
+            )
+            print("[v37_audit_indexes] Migration applied — 2 indexes added for People page + Jobs perf")
+        }
+
         try migrator.migrate(dbPool)
         validateMigrations()
     }

@@ -87,18 +87,21 @@ struct CurveLinearizeView: View {
                                 .buttonStyle(.bordered)
                                 .controlSize(.mini)
                                 .disabled(viewModel.linearizeMeasurement == nil)
+                                .help(viewModel.linearizeMeasurement == nil ? "Load a measurement file first" : "Pivot the measurement around the midpoint")
 
                             Button("Sort") { viewModel.sortMeasurement() }
                                 .font(.system(size: 10))
                                 .buttonStyle(.bordered)
                                 .controlSize(.mini)
                                 .disabled(viewModel.linearizeMeasurement == nil)
+                                .help(viewModel.linearizeMeasurement == nil ? "Load a measurement file first" : "Sort measurement steps by input value")
 
                             Button("Revert") { viewModel.revertMeasurement() }
                                 .font(.system(size: 10))
                                 .buttonStyle(.bordered)
                                 .controlSize(.mini)
                                 .disabled(viewModel.linearizeMeasurement == nil)
+                                .help(viewModel.linearizeMeasurement == nil ? "Load a measurement file first" : "Discard sort/pivot edits and restore the original measurement")
 
                             Spacer()
                         }
@@ -350,6 +353,17 @@ struct CurveLinearizeView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(viewModel.linearizeMeasurement == nil || viewModel.linearizeSourceQuad == nil)
+                .help({
+                    if viewModel.linearizeMeasurement == nil && viewModel.linearizeSourceQuad == nil {
+                        return "Load both a measurement file and a source .quad to linearize"
+                    } else if viewModel.linearizeMeasurement == nil {
+                        return "Load a measurement file to linearize"
+                    } else if viewModel.linearizeSourceQuad == nil {
+                        return "Load a source .quad curve to linearize"
+                    } else {
+                        return "Linearize the source curve against the measurement"
+                    }
+                }())
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -646,6 +660,7 @@ struct CurveLinearizeView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                         .disabled(viewModel.linearizedQuad == nil)
+                        .help(viewModel.linearizedQuad == nil ? "Run Linearize first to generate a curve" : "Save the linearized curve as a .quad file")
                     }
                 }
                 .padding(10)

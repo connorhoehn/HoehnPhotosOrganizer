@@ -82,10 +82,18 @@ class MacPeerSyncAdvertiser: NSObject, ObservableObject {
 
     /// Apply curation deltas received from iOS to local database.
     private func applyDelta(json: String, coordinator: Coordinator) {
-        guard let data = json.data(using: .utf8),
-              let deltas = try? JSONDecoder().decode([PhotoCurationDelta].self, from: data)
-        else {
-            print("[Mac] Failed to decode DELTA_V1 JSON")
+        guard let data = json.data(using: .utf8) else {
+            print("[Mac] Failed to decode sync delta — DELTA_V1 payload was not valid UTF-8; peer sync aborted")
+            return
+        }
+        let deltas: [PhotoCurationDelta]
+        do {
+            // Why: a `try?` here previously erased the underlying decode error,
+            // making schema drift between iOS and Mac builds invisible. Surface
+            // the real DecodingError so version mismatches are diagnosable.
+            deltas = try JSONDecoder().decode([PhotoCurationDelta].self, from: data)
+        } catch {
+            print("[Mac] Failed to decode sync delta — peer sync aborted: \(error)")
             return
         }
 
@@ -123,10 +131,18 @@ class MacPeerSyncAdvertiser: NSObject, ObservableObject {
     /// All deltas are applied inside a single write transaction so a failed
     /// delta cannot leave the DB half-updated.
     private func applyPeopleDeltas(json: String, coordinator: Coordinator) {
-        guard let data = json.data(using: .utf8),
-              let deltas = try? JSONDecoder().decode([PeopleSyncDelta].self, from: data)
-        else {
-            print("[Mac] Failed to decode PEOPLE_V1 JSON")
+        guard let data = json.data(using: .utf8) else {
+            print("[Mac] Failed to decode people delta — PEOPLE_V1 payload was not valid UTF-8; peer sync aborted")
+            return
+        }
+        let deltas: [PeopleSyncDelta]
+        do {
+            // Why: surface the real DecodingError so a malformed PeopleSyncDelta
+            // case (added on iOS, missing on Mac) shows up in logs instead of
+            // silently dropping the whole batch.
+            deltas = try JSONDecoder().decode([PeopleSyncDelta].self, from: data)
+        } catch {
+            print("[Mac] Failed to decode people delta — peer sync aborted: \(error)")
             return
         }
 

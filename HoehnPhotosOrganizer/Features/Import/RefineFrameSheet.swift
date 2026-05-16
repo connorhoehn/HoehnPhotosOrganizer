@@ -271,7 +271,7 @@ struct RefineFrameSheet: View {
                 // 4. Re-generate proxy immediately.
                 let photoRepo = PhotoRepository(db: db)
                 let proxyRepo = ProxyAssetRepository(db: db)
-                let proxyActor = ProxyGenerationActor(photoRepo: photoRepo, proxyRepo: proxyRepo)
+                let proxyActor = ProxyGenerationActor(photoRepo: photoRepo, proxyRepo: proxyRepo, appDatabase: db)
                 for await _ in proxyActor.processLocalQueue() {}
 
                 statusMessage = "Saved."

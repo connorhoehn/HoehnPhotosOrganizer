@@ -559,6 +559,7 @@ struct StudioCanvasView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(cropRect.width < 4 || cropRect.height < 4)
+                        .help((cropRect.width < 4 || cropRect.height < 4) ? "Drag a larger selection (at least 4x4) to crop" : "Crop the image to the selected region")
                     }
                     .position(
                         x: geo.size.width / 2,
@@ -1106,6 +1107,7 @@ struct StudioCanvasView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.chatInput.isEmpty || viewModel.chatLoading)
+                .help(viewModel.chatLoading ? "Assistant is responding..." : (viewModel.chatInput.isEmpty ? "Type a message to send" : "Send the message to the Studio assistant"))
             }
             .padding(10)
         }

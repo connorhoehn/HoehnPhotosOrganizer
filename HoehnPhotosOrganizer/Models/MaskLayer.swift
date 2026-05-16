@@ -283,7 +283,16 @@ struct MaskLayer: Codable, Identifiable, Equatable {
     }
 
     func encode(to encoder: Encoder) throws {
-        fatalError("Legacy MaskLayer should not be encoded — use AdjustmentLayer")
+        // Why: legacy MaskLayer is read-only — all new writes must go through
+        // AdjustmentLayer. Throw a proper encoding error so callers can surface
+        // the misuse instead of trapping the whole process.
+        throw EncodingError.invalidValue(
+            self,
+            EncodingError.Context(
+                codingPath: encoder.codingPath,
+                debugDescription: "Legacy MaskLayer should not be encoded — convert via toAdjustmentLayer() and encode the AdjustmentLayer instead."
+            )
+        )
     }
 
     /// Convert legacy MaskLayer to new AdjustmentLayer format.

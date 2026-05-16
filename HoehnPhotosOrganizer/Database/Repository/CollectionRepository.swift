@@ -60,12 +60,16 @@ actor CollectionRepository {
 
     /// Fetches all photos in a manual collection via a JOIN on collection_members.
     /// Returns photos ordered by collection_members.added_at ASC.
+    /// Filtered to library-committed photos — collections are a library-context surface,
+    /// and a staged photo that was added to a collection while inside an open triage job
+    /// should not appear in the collection view until the job is committed.
     func fetchPhotos(inCollection collectionId: String) async throws -> [PhotoAsset] {
         try await db.dbPool.read { conn in
             let sql = """
                 SELECT photo_assets.* FROM photo_assets
                 JOIN collection_members ON collection_members.photo_id = photo_assets.id
                 WHERE collection_members.collection_id = ?
+                  AND photo_assets.import_status = 'library'
                 ORDER BY collection_members.added_at ASC
             """
             return try PhotoAsset.fetchAll(conn, sql: sql, arguments: [collectionId])
@@ -127,9 +131,12 @@ actor CollectionRepository {
 
     /// Fetches photos for a smart collection by translating its rules to a GRDB request and executing it.
     /// Returns an empty array if no photos match the rules (not an error).
+    /// Always intersected with `import_status = 'library'` — smart collections are a
+    /// library-context surface; staged photos cannot appear regardless of rule set.
     func fetchPhotos(forSmartCollection collectionId: String, rules: [SmartCollectionRule]) async throws -> [PhotoAsset] {
         try await db.dbPool.read { conn in
             let req = request(for: rules)
+                .filter(Column("import_status") == "library")
             return try req.fetchAll(conn)
         }
     }

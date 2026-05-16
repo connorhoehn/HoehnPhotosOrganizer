@@ -40,6 +40,9 @@ struct JobsView: View {
                 .background(Color(nsColor: .windowBackgroundColor))
         }
         .task { await loadJobs() }
+        .onChange(of: viewModel.jobsChangeToken) { _, _ in
+            Task { await loadJobs(showLoading: false) }
+        }
         .onChange(of: viewModel.pendingJobSelection) { _, newValue in
             if let jobId = newValue {
                 selectedJobId = jobId
@@ -137,6 +140,16 @@ struct JobsView: View {
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
             Divider()
+
+            if viewModel.isImporting {
+                importingBanner
+                Divider()
+            }
+
+            if !viewModel.isImporting && (viewModel.isGeneratingProxies || viewModel.isFaceIndexing || viewModel.isAutoOrienting || viewModel.isBackfillingFaceChips) {
+                backgroundActivityBanner
+                Divider()
+            }
 
             // Search field
             HStack(spacing: 6) {
@@ -308,6 +321,11 @@ struct JobsView: View {
                         Text("· \(childJobsMap[job.id]?.count ?? 0) sub-jobs")
                             .font(.system(size: 10)).foregroundStyle(.tertiary)
                     }
+                    if viewModel.importingJobId == job.id {
+                        Text("· importing…")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.blue)
+                    }
                 }
             }
             Spacer()
@@ -344,6 +362,135 @@ struct JobsView: View {
         }.frame(maxWidth: .infinity)
     }
 
+    /// Shown after import finishes while proxies are still rendering or face indexing
+    /// is running. Surfaces work that's invisible in the per-job thumbnail grid otherwise
+    /// (thumbnails still empty, face counts still 0) so the user knows something is happening.
+    @ViewBuilder
+    private var backgroundActivityBanner: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if viewModel.isGeneratingProxies {
+                activityRow(
+                    title: "Generating previews…",
+                    jobTitle: viewModel.processingJobTitle,
+                    detail: {
+                        guard let p = viewModel.proxyProgress, p.total > 0 else { return nil }
+                        return "\(p.completed) of \(p.total)\(p.failed > 0 ? " · \(p.failed) failed" : "")"
+                    }()
+                )
+            }
+            if viewModel.isFaceIndexing {
+                activityRow(
+                    title: "Detecting faces…",
+                    jobTitle: viewModel.processingJobTitle,
+                    detail: viewModel.faceIndexingProgress.isEmpty ? nil : viewModel.faceIndexingProgress
+                )
+            }
+            if viewModel.isAutoOrienting {
+                activityRow(
+                    title: "Auto-orienting…",
+                    jobTitle: nil,
+                    detail: {
+                        guard let p = viewModel.autoOrientProgress, p.total > 0 else { return nil }
+                        return "\(p.completed) of \(p.total)"
+                    }()
+                )
+            }
+            if viewModel.isBackfillingFaceChips {
+                activityRow(
+                    title: "Backfilling face chips…",
+                    jobTitle: nil,
+                    detail: {
+                        guard let p = viewModel.faceChipBackfillProgress, p.total > 0 else { return nil }
+                        return "\(p.completed) of \(p.total)"
+                    }()
+                )
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.secondary.opacity(0.06))
+    }
+
+    /// One row of the sidebar background-activity banner. Job title (when known) sits
+    /// on the headline as a small dimmed suffix so users can tell which job each running
+    /// pipeline belongs to.
+    @ViewBuilder
+    private func activityRow(title: String, jobTitle: String?, detail: String?) -> some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.system(size: 12, weight: .semibold))
+                    if let jobTitle, !jobTitle.isEmpty {
+                        Text(jobTitle)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                if let detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            Spacer()
+        }
+    }
+
+    /// Shown while `LibraryViewModel.isImporting` is true. Styled as a non-interactive
+    /// status pill (not a list row) so it isn't visually confused with a selectable job.
+    /// References the in-progress job by its title so users can tell which row down in the
+    /// list is being populated.
+    private var importingBanner: some View {
+        let total = viewModel.importPhotoTotal
+        let processed = viewModel.importPhotoProcessed
+        let title = viewModel.importingJobTitle
+        return HStack(spacing: 10) {
+            ProgressView()
+                .controlSize(.small)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("IMPORTING")
+                        .font(.system(size: 9, weight: .heavy))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.6)
+                    if let t = title {
+                        Text(t)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                if total > 0 {
+                    Text("\(processed) of \(total) scanned")
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                } else {
+                    Text("Scanning…")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            // Diagonal stripe pattern overlay would be ideal but expensive; use a flat
+            // muted neutral fill + a left accent stripe so it reads as system status, not list row.
+            ZStack(alignment: .leading) {
+                Color.secondary.opacity(0.10)
+                Rectangle()
+                    .fill(Color.blue.opacity(0.6))
+                    .frame(width: 3)
+            }
+        )
+        .allowsHitTesting(false)   // explicitly non-clickable — visual cue only
+    }
+
     private var openCount: Int { rootJobs.filter { $0.status == .open }.count }
     private var completeCount: Int { rootJobs.filter { $0.status == .complete }.count }
     /// Jobs whose tasks are all complete but haven't been committed/archived yet.
@@ -375,9 +522,10 @@ struct JobsView: View {
             childJobsMap.values.flatMap { $0 }.first(where: { $0.id == id })
     }
 
-    private func loadJobs() async {
+    private func loadJobs(showLoading: Bool = true) async {
         guard let db else { return }
-        isLoading = true; defer { isLoading = false }
+        if showLoading { isLoading = true }
+        defer { isLoading = false }
         let repo = TriageJobRepository(db: db)
         do {
             rootJobs = try await repo.fetchRootJobs()
@@ -412,6 +560,25 @@ struct JobsView: View {
         await viewModel.refreshCurationCounts()
         await loadJobs()
     }
+}
+
+// MARK: - Job processing stats
+
+/// Snapshot of per-pipeline completion counts for a single TriageJob's photos.
+/// Sourced from a single SQL query against photo_assets + embeddings + face_indexed_at.
+struct JobProcessingStats: Equatable {
+    let total: Int
+    let proxiesReady: Int
+    let embeddingsCached: Int
+    let facesIndexed: Int
+
+    /// True when every tracked pipeline has reached `total` (or total is 0).
+    var isAllComplete: Bool {
+        total == 0 || (proxiesReady == total && embeddingsCached == total && facesIndexed == total)
+    }
+
+    /// Slowest pipeline's count — used as the "overall" headline number on the banner.
+    var minCompleted: Int { min(proxiesReady, min(embeddingsCached, facesIndexed)) }
 }
 
 // MARK: - Job Detail View
@@ -452,6 +619,11 @@ struct JobDetailView: View {
     @State private var showSplitSheet = false
     @State private var showDustRemoval = false
     @State private var ringCompletionPulse = false
+
+    /// Per-job ML processing stats — populated by a background poll while the view is open.
+    /// `nil` until the first query lands. The banner hides itself once every pipeline reaches total.
+    @State private var processingStats: JobProcessingStats?
+    @State private var processingPollTask: Task<Void, Never>?
 
     /// True when all photos have been rated (review task complete).
     private var isReviewDone: Bool {
@@ -498,6 +670,15 @@ struct JobDetailView: View {
                         VStack(spacing: 0) {
                             if job.status == .open {
                                 stagedBanner.padding(.horizontal, 16).padding(.vertical, 10)
+                                Divider()
+                            }
+                            if let stats = processingStats, stats.total > 0 {
+                                // Panel stays visible after completion so the user can see
+                                // every pipeline's final state (filled bars + checkmarks
+                                // instead of "wait, did it finish?").
+                                processingBanner(stats)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
                                 Divider()
                             }
                             if isArchiveReady {
@@ -583,6 +764,17 @@ struct JobDetailView: View {
         previewPhoto = nil
         await loadDetail()
     }
+    .onChange(of: processingStats) { _, _ in
+        // When the per-job stats poll lands new counts, rebuild the task list so
+        // `lockedReason` flips off as soon as the relevant pipeline finishes.
+        Task { tasks = await buildTasks(photos: photos) }
+    }
+    .onAppear { startProcessingPoll() }
+    .onDisappear { processingPollTask?.cancel(); processingPollTask = nil }
+    .onChange(of: job.id) { _, _ in
+        processingStats = nil
+        startProcessingPoll()
+    }
     .sheet(isPresented: $showReviewSheet, onDismiss: {
         developPhotos = []
         Task {
@@ -610,9 +802,13 @@ struct JobDetailView: View {
         )
     }
     .sheet(isPresented: $showPeopleWidget, onDismiss: { Task { await loadDetail() } }) {
-        JobPeopleWidget(photoIds: peopleWidgetPhotoIds, onDone: {
-            Task { await loadDetail() }
-        })
+        JobPeopleWidget(
+            photoIds: peopleWidgetPhotoIds,
+            onDone: { Task { await loadDetail() } },
+            // Each label/skip action calls back here so the background card's
+            // "X of N identified" updates live instead of waiting for dismiss.
+            onLabelsChanged: { Task { await loadDetail() } }
+        )
     }
     .sheet(isPresented: $showDustRemoval) {
         BatchDustRemovalView(photoIds: photos.map(\.id))
@@ -1146,6 +1342,113 @@ struct JobDetailView: View {
         }
     }
 
+    // MARK: - Per-job ML processing status
+
+    /// Builds a per-pipeline progress view scoped to this job's photos.
+    /// Stays visible across the job's life — shows in-progress bars while pipelines run,
+    /// then settles into green-filled bars with checkmarks once each pipeline reaches total.
+    @ViewBuilder
+    private func processingBanner(_ stats: JobProcessingStats) -> some View {
+        let rows: [(label: String, value: Int)] = [
+            ("Previews",   stats.proxiesReady),
+            ("Embeddings", stats.embeddingsCached),
+            ("Faces",      stats.facesIndexed),
+        ]
+        let allDone = stats.isAllComplete
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: allDone ? "checkmark.seal.fill" : "wand.and.stars")
+                    .font(.system(size: 11))
+                    .foregroundStyle(allDone ? .green : .blue)
+                Text(allDone ? "Processing complete" : "Processing photos")
+                    .font(.system(size: 12, weight: .semibold))
+                Spacer()
+                Text("\(stats.minCompleted) of \(stats.total)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            ForEach(rows, id: \.label) { row in
+                let done = row.value >= stats.total && stats.total > 0
+                HStack(spacing: 8) {
+                    Text(row.label)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 70, alignment: .leading)
+                    ProgressView(value: stats.total == 0 ? 0 : Double(row.value) / Double(stats.total))
+                        .progressViewStyle(.linear)
+                        .controlSize(.small)
+                        .tint(done ? .green : .blue)
+                    HStack(spacing: 4) {
+                        if done {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.green)
+                        }
+                        Text("\(row.value)/\(stats.total)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                            .monospacedDigit()
+                    }
+                    .frame(width: 70, alignment: .trailing)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill((allDone ? Color.green : Color.blue).opacity(0.06))
+        )
+    }
+
+    /// Drives the polling loop while the job detail view is open. Re-queries every 2s
+    /// until all pipelines reach `total`; then sleeps until something signals new work
+    /// (currently we just stop — the next time the user re-selects the job, the poll restarts).
+    private func startProcessingPoll() {
+        processingPollTask?.cancel()
+        guard db != nil else { return }
+        processingPollTask = Task { [jobId = job.id] in
+            while !Task.isCancelled {
+                let stats = await fetchProcessingStats(jobId: jobId)
+                if !Task.isCancelled {
+                    processingStats = stats
+                }
+                // Stop polling once everything's done — saves the per-tick query cost.
+                if let s = stats, s.isAllComplete { return }
+                // 500ms gives visibly continuous bar advancement: the query is a single
+                // grouped COUNT (<1ms) and the batcher flushes every ~10 photos, so each
+                // poll picks up roughly one batch-worth of new completions.
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
+    }
+
+    private func fetchProcessingStats(jobId: String) async -> JobProcessingStats? {
+        guard let db else { return nil }
+        return try? await db.dbPool.read { d -> JobProcessingStats in
+            let row = try Row.fetchOne(d, sql: """
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN pa.processing_state = 'proxy_ready' THEN 1 ELSE 0 END) AS proxies_ready,
+                    SUM(CASE WHEN EXISTS (SELECT 1 FROM embeddings e WHERE e.photo_asset_id = pa.id) THEN 1 ELSE 0 END) AS embeddings_cached,
+                    SUM(CASE WHEN pa.face_indexed_at IS NOT NULL THEN 1 ELSE 0 END) AS faces_indexed
+                FROM photo_assets pa
+                JOIN triage_job_photos tjp ON tjp.photo_id = pa.id
+                WHERE tjp.job_id = ?
+                """, arguments: [jobId])
+            let total = Int(row?["total"] as? Int64 ?? 0)
+            let proxies = Int(row?["proxies_ready"] as? Int64 ?? 0)
+            let emb = Int(row?["embeddings_cached"] as? Int64 ?? 0)
+            let faces = Int(row?["faces_indexed"] as? Int64 ?? 0)
+            return JobProcessingStats(
+                total: total,
+                proxiesReady: proxies,
+                embeddingsCached: emb,
+                facesIndexed: faces
+            )
+        }
+    }
+
     // MARK: - Complete & Commit
 
     private func completeAndCommit() {
@@ -1174,13 +1477,18 @@ struct JobDetailView: View {
                 faceCount = (try? await db.dbPool.read { d in
                     try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM face_embeddings WHERE photo_id IN (\(inClause))")
                 }) ?? 0
-                // Count any face with a person_id assigned — including "Stranger"
-                // (Stranger = user made a decision; counts as identified for job completeness)
+                // "Identified" must match what JobPeopleWidget's modal considers labeled:
+                // person_id assigned AND needs_review = 0. A tentative match (person_id
+                // set, needs_review = 1) is still queued for the user's confirmation, so
+                // it should NOT count as identified — otherwise the card and the modal
+                // disagree on the same set of faces. Stranger counts as identified
+                // because it's stored as a real person identity with needs_review = 0.
                 identifiedCount = (try? await db.dbPool.read { d in
                     try Int.fetchOne(d, sql: """
                         SELECT COUNT(*) FROM face_embeddings
                         WHERE photo_id IN (\(inClause))
                         AND person_id IS NOT NULL
+                        AND needs_review = 0
                     """)
                 }) ?? 0
             }
@@ -1257,6 +1565,19 @@ struct JobDetailView: View {
         let photosWithMetadata = keeperCount - keepersWithoutMetadata
         let metadataDone = keeperCount > 0 && keepersWithoutMetadata == 0
 
+        // Pipeline-readiness gates. Review and Develop both need proxies (no point
+         // opening a review UI before there are thumbnails). Identify People also
+         // needs face indexing on top of proxies. processingStats may be nil briefly
+         // on first load — treat that as "still computing" to err on the safe side.
+        let previewsReady = (processingStats?.proxiesReady ?? 0) >= (processingStats?.total ?? 1)
+            && (processingStats?.total ?? 0) > 0
+        let facesIndexed = (processingStats?.facesIndexed ?? 0) >= (processingStats?.total ?? 1)
+            && (processingStats?.total ?? 0) > 0
+        let previewsLockReason: String? = previewsReady ? nil : "Waiting for previews to finish generating…"
+        let facesLockReason: String? = previewsReady && facesIndexed
+            ? nil
+            : (previewsReady ? "Waiting for face detection to finish…" : "Waiting for previews to finish generating…")
+
         var result: [JobTask] = []
 
         result.append(JobTask(
@@ -1270,7 +1591,8 @@ struct JobDetailView: View {
             progress: total > 0 ? Double(culled) / Double(total) : 1,
             actionLabel: reviewDone ? "Re-review" : "Start Review",
             isComplete: reviewDone,
-            action: { }
+            action: { },
+            lockedReason: previewsLockReason
         ))
 
         if faceCount > 0 {
@@ -1285,7 +1607,8 @@ struct JobDetailView: View {
                 progress: faceCount > 0 ? Double(identifiedCount) / Double(faceCount) : 1,
                 actionLabel: facesDone ? "Re-identify" : "Identify Faces",
                 isComplete: facesDone,
-                action: { }
+                action: { },
+                lockedReason: facesLockReason
             ))
         }
 
@@ -1322,7 +1645,8 @@ struct JobDetailView: View {
                     viewModel.selectedPhotoID = keeperPhotos.first?.id
                     viewModel.showDevelopMode = true
                 }
-            }
+            },
+            lockedReason: previewsLockReason
         ))
 
         let metaDesc: String
@@ -1435,14 +1759,18 @@ private struct QuickPhotoPreview: View {
 
                 Spacer()
 
-                Button("Open in Develop") {
-                    viewModel.developSequence = allPhotos
-                    viewModel.developPhoto = currentPhoto
-                    viewModel.selectedPhotoID = currentPhoto.id
-                    viewModel.showDevelopMode = true
-                    dismiss()
+                // Develop is gated on import-to-library: staged photos aren't in the
+                // library yet, so opening them in Develop would be a dead-end action.
+                if currentPhoto.importStatus == "library" {
+                    Button("Open in Develop") {
+                        viewModel.developSequence = allPhotos
+                        viewModel.developPhoto = currentPhoto
+                        viewModel.selectedPhotoID = currentPhoto.id
+                        viewModel.showDevelopMode = true
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent).controlSize(.small)
                 }
-                .buttonStyle(.borderedProminent).controlSize(.small)
 
                 Button("Done") { dismiss() }
                     .buttonStyle(.bordered).controlSize(.small)
@@ -2123,6 +2451,11 @@ struct JobTask: Identifiable {
     let actionLabel: String
     let isComplete: Bool
     let action: () -> Void
+    /// Non-nil when the task's action button should be disabled, with a short
+    /// human-readable explanation shown beneath the button. Used to block tasks
+    /// that depend on still-running ML pipelines (review/develop need proxies;
+    /// identify needs face indexing).
+    var lockedReason: String? = nil
 }
 
 // MARK: - Task Card
@@ -2165,10 +2498,23 @@ struct TaskCard: View {
                         .tint(task.isComplete ? .green : task.iconColor)
                 }
 
-                Button(task.actionLabel) { (actionOverride ?? task.action)() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .tint(task.iconColor)
+                HStack(spacing: 8) {
+                    Button(task.actionLabel) { (actionOverride ?? task.action)() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .tint(task.iconColor)
+                        .disabled(task.lockedReason != nil)
+                        .help(task.lockedReason ?? "")
+                    if let reason = task.lockedReason {
+                        HStack(spacing: 4) {
+                            ProgressView().controlSize(.mini)
+                            Text(reason)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
             }
         }
         .padding(14)

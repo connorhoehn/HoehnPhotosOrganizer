@@ -216,6 +216,7 @@ struct CurveLabChatPanel: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .disabled(viewModel.chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .help(viewModel.chatInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Type a message to send" : "Send the message to the curve assistant")
                 }
             }
             .padding(10)

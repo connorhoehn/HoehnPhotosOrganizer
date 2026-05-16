@@ -283,6 +283,7 @@ struct PrintLabView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(viewModel.canvasImages.isEmpty)
+            .help(viewModel.canvasImages.isEmpty ? "Add at least one image to the canvas to print" : "Send the canvas to the printer")
 
             // Hidden keyboard shortcut buttons
             Group {

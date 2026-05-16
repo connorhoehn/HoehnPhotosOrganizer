@@ -14,6 +14,14 @@ import GRDB
 /// Batch variant: pass multiple photos to apply the same set of adjustments to all.
 actor ImageAdjustmentService {
 
+    /// Per-photo outcome surfaced from a batch apply. The caller decides how to
+    /// present failures — previously errors were `print`-only and the user saw
+    /// "Adjustments saved to 95 photos" with no indication 5 had failed.
+    struct ApplyResult: Sendable {
+        let successCount: Int
+        let failures: [(photo: PhotoAsset, error: String)]
+    }
+
     // MARK: - Apply
 
     /// Write adjustment XMP sidecar(s) for one or more photos, log each to activity_log.
@@ -22,16 +30,17 @@ actor ImageAdjustmentService {
     ///   - photos: One or more PhotoAssets to adjust. The source file must be accessible.
     ///   - adjustments: The ordered list of adjustments to encode.
     ///   - db: Live AppDatabase for activity log writes.
-    /// - Returns: Count of photos successfully processed (failures are logged, not thrown).
+    /// - Returns: `ApplyResult` carrying success count and per-photo failure reasons.
     func applyAdjustments(
         to photos: [PhotoAsset],
         adjustments: [ImageAdjustment],
         db: AppDatabase
-    ) async throws -> Int {
+    ) async throws -> ApplyResult {
         let xmpService = XMPSidecarService()
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         var successCount = 0
+        var failures: [(photo: PhotoAsset, error: String)] = []
 
         for photo in photos {
             let photoURL = URL(fileURLWithPath: photo.filePath)
@@ -63,11 +72,13 @@ actor ImageAdjustmentService {
 
                 successCount += 1
             } catch {
+                let desc = error.localizedDescription
                 print("ImageAdjustmentService: failed for \(photo.canonicalName): \(error)")
+                failures.append((photo: photo, error: desc))
             }
         }
 
-        return successCount
+        return ApplyResult(successCount: successCount, failures: failures)
     }
 
     // MARK: - Read

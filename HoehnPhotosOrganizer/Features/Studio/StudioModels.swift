@@ -197,6 +197,12 @@ class StudioViewModel: ObservableObject {
     @Published var chatInput: String = ""
     @Published var chatLoading: Bool = false
 
+    /// Transient user-facing status message — render failures, export errors, save
+    /// failures. UI surfaces this via the shared `StatusBanner` overlay attached
+    /// at `StudioHostView`. Replaces a swath of `try?` swallows that were silently
+    /// losing data. New assignments cancel any in-flight auto-dismiss timer.
+    @Published var statusBanner: StatusBanner.Message? = nil
+
     /// Send a chat message through the real Claude API and append the response.
     func sendChatMessage(_ text: String) {
         let userMsg = StudioChatMessage(role: .user, text: text)
@@ -274,7 +280,17 @@ class StudioViewModel: ObservableObject {
     }
 
     init() {
-        loadVersionsFromDisk()
+        // Disk enumeration + JSON decode + NSImage decode for every version was
+        // running synchronously on the MainActor during init — first Studio open froze
+        // the UI proportional to versions × thumbnail size. The detached task hops the
+        // I/O off main; results publish back via `versions = ...` on MainActor.
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            let loaded = Self.loadVersionsFromDiskSync(
+                directory: await self.versionsDirectory
+            )
+            await MainActor.run { self.versions = loaded }
+        }
     }
 
     // MARK: - Actions
@@ -520,7 +536,14 @@ class StudioViewModel: ObservableObject {
 
     func loadAllCanvases() async {
         guard let repo = canvasRepo else { return }
-        do { canvases = try await repo.allCanvases() } catch { }
+        do {
+            canvases = try await repo.allCanvases()
+        } catch {
+            print("[Studio] Failed to load canvases: \(error)")
+            // Empty list is a defensible default — gallery view shows "no canvases"
+            // empty state which is at least honest. Could surface via a banner later.
+            canvases = []
+        }
     }
 
     func resumeCanvas(_ canvas: StudioCanvas) {
@@ -634,7 +657,17 @@ class StudioViewModel: ObservableObject {
             } catch is CancellationError {
                 // Render was cancelled
             } catch {
-                print("[StudioRender] Error: \(error.localizedDescription)")
+                // Surface render failures so the user isn't left staring at a
+                // stale preview wondering why the slider stopped responding.
+                // Hop to MainActor because this is inside a Task.detached.
+                let desc = error.localizedDescription
+                print("[StudioRender] Error: \(desc)")
+                await MainActor.run {
+                    self?.statusBanner = .init(
+                        text: "Render failed: \(desc)",
+                        style: .error
+                    )
+                }
             }
 
             await MainActor.run {
@@ -681,7 +714,14 @@ class StudioViewModel: ObservableObject {
                 }
                 renderedImage = output
             } catch {
+                // Full-resolution renders are explicit user actions (export,
+                // print, etc.) — silently swallowing the error leaves the user
+                // with a stale image and no signal that the operation failed.
                 print("[StudioRender] Full render error: \(error)")
+                statusBanner = .init(
+                    text: "Render failed: \(error.localizedDescription)",
+                    style: .error
+                )
             }
             isFullRendering = false
             renderTask = nil
@@ -758,17 +798,44 @@ class StudioViewModel: ObservableObject {
         }
 
         if let data {
-            try? data.write(to: url, options: .atomic)
+            do {
+                try data.write(to: url, options: .atomic)
+                statusBanner = .init(
+                    text: "Exported to \(url.lastPathComponent)",
+                    style: .success
+                )
+            } catch {
+                // Surface export failure instead of silently lying. The user just
+                // picked a save location and hit Export — they need to know if the
+                // file didn't actually land.
+                statusBanner = .init(
+                    text: "Export failed: \(error.localizedDescription)",
+                    style: .error
+                )
+                print("[Studio] Export write failed: \(error)")
+                return
+            }
 
-            // Emit activity event
+            // Emit activity event (best-effort — telemetry failure shouldn't
+            // contradict the export success the user just saw).
             let format = url.pathExtension
             let path = url.path
             let capturedService = activityEventService
             Task {
-                try? await capturedService?.emitStudioExported(
-                    format: format, filePath: path
-                )
+                do {
+                    try await capturedService?.emitStudioExported(
+                        format: format, filePath: path
+                    )
+                } catch {
+                    print("[Studio] emitStudioExported failed (non-fatal): \(error)")
+                }
             }
+        } else {
+            statusBanner = .init(
+                text: "Export failed: could not encode image",
+                style: .error
+            )
+            print("[Studio] Export encoding failed — no data for format \(url.pathExtension)")
         }
     }
 
@@ -848,30 +915,53 @@ class StudioViewModel: ObservableObject {
         encoder.outputFormatting = .prettyPrinted
         let jsonData = try? encoder.encode(version)
 
-        // All I/O and JPEG encoding off the main thread
-        DispatchQueue.global(qos: .utility).async {
+        // All I/O and JPEG encoding off the main thread. Failures hop back to
+        // MainActor and surface via statusBanner so the user knows their work
+        // didn't land on disk — previously `try?` ate the error and the version
+        // would silently disappear on next launch.
+        DispatchQueue.global(qos: .utility).async { [weak self] in
             if let jsonData {
                 let jsonURL = dir.appendingPathComponent("\(versionId).json")
-                try? jsonData.write(to: jsonURL, options: .atomic)
+                do {
+                    try jsonData.write(to: jsonURL, options: .atomic)
+                } catch {
+                    let desc = error.localizedDescription
+                    print("[Studio] Version JSON write failed: \(error)")
+                    Task { @MainActor [weak self] in
+                        self?.statusBanner = .init(
+                            text: "Version save failed: \(desc)",
+                            style: .error
+                        )
+                    }
+                    return
+                }
             }
             if let tiffData,
                let bitmap = NSBitmapImageRep(data: tiffData),
                let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) {
                 let thumbURL = dir.appendingPathComponent("\(versionId).jpg")
-                try? jpegData.write(to: thumbURL, options: .atomic)
+                do {
+                    try jpegData.write(to: thumbURL, options: .atomic)
+                } catch {
+                    // Thumbnail failure is non-fatal — JSON already landed, version is
+                    // recoverable. Log but don't alarm the user.
+                    print("[Studio] Version thumbnail write failed: \(error)")
+                }
             }
         }
     }
 
-    private func loadVersionsFromDisk() {
+    /// Off-MainActor disk scan + decode used by `init()`'s background warm-up.
+    /// Pure function — no @Published mutation. Caller is responsible for assigning
+    /// the result onto `versions` from MainActor.
+    nonisolated private static func loadVersionsFromDiskSync(directory: URL) -> [StudioVersion] {
         let fm = FileManager.default
-        let dir = versionsDirectory
-        guard fm.fileExists(atPath: dir.path) else { return }
+        guard fm.fileExists(atPath: directory.path) else { return [] }
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
-        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
+        guard let files = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return [] }
         let jsonFiles = files.filter { $0.pathExtension == "json" }
 
         var loaded: [StudioVersion] = []
@@ -881,16 +971,14 @@ class StudioViewModel: ObservableObject {
 
             // Load thumbnail from companion JPEG file
             if let thumbFilename = version.thumbnailFilename {
-                let thumbURL = dir.appendingPathComponent(thumbFilename)
+                let thumbURL = directory.appendingPathComponent(thumbFilename)
                 if fm.fileExists(atPath: thumbURL.path) {
                     version.thumbnail = NSImage(contentsOf: thumbURL)
                 }
             }
             loaded.append(version)
         }
-
-        // Sort newest first
-        versions = loaded.sorted { $0.createdAt > $1.createdAt }
+        return loaded.sorted { $0.createdAt > $1.createdAt }
     }
 
     // MARK: - Database Persistence

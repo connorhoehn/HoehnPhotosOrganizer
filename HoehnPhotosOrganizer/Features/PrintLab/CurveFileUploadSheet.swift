@@ -63,6 +63,7 @@ struct CurveFileUploadSheet: View {
                         .cornerRadius(8)
                     }
                     .disabled(isUploading)
+                    .help(isUploading ? "Upload in progress..." : "Pick a .quad or .curve file from disk")
                     .padding()
                 }
 
@@ -87,6 +88,7 @@ struct CurveFileUploadSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                         .disabled(isUploading)
+                        .help(isUploading ? "Wait for upload to finish before cancelling" : "Close the upload sheet")
                 }
                 if selectedFileURL != nil {
                     ToolbarItem(placement: .confirmationAction) {

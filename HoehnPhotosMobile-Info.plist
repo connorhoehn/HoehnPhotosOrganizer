@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>HOEHN_COGNITO_CLIENT_ID</key>
-	<string>7799f441k86ko5s0pg1475hqs8</string>
+	<string>2arl7jchprbtpg0ep0n54tdjas</string>
 	<key>HOEHN_COGNITO_REGION</key>
 	<string>us-east-1</string>
 	<key>HOEHN_API_BASE_URL</key>
-	<string>https://wkoyma21q0.execute-api.us-east-1.amazonaws.com/v1</string>
+	<string>https://bslzrh6qo5.execute-api.us-east-1.amazonaws.com/v1</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Sync your photo catalog with your Mac over the local network.</string>
 	<key>NSBonjourServices</key>

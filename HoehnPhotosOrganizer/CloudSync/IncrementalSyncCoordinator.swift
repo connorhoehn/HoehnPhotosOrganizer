@@ -58,7 +58,22 @@ actor IncrementalSyncCoordinator {
     // MARK: - Public API
 
     /// Perform incremental sync: upload queued entries, download remote changes, resolve conflicts.
+    /// Always emits a terminal `.idle` or `.error` on the progress publisher so the UI's
+    /// `currentPhase` indicator never gets stuck mid-flight.
     func syncIncremental() async throws {
+        do {
+            try await runSyncIncremental()
+            progressUpdates.send(SyncProgressUpdate(phase: .idle, timestamp: Date()))
+        } catch {
+            progressUpdates.send(SyncProgressUpdate(
+                phase: .error(error.localizedDescription),
+                timestamp: Date()
+            ))
+            throw error
+        }
+    }
+
+    private func runSyncIncremental() async throws {
         // 1. Get last sync cursor
         let lastTs = try await syncStateRepo.getLastSyncTimestamp()
 
@@ -69,7 +84,9 @@ actor IncrementalSyncCoordinator {
             // Nothing to upload — still check for remote changes
             progressUpdates.send(SyncProgressUpdate(phase: .downloading, timestamp: Date()))
             try await downloadRemoteChanges(since: lastTs)
-            progressUpdates.send(SyncProgressUpdate(phase: .idle, timestamp: Date()))
+            // Advance the sync cursor on download-only success so "Never synced"
+            // clears for users who only ever pull (no thread entries queued locally).
+            try await syncStateRepo.setLastSyncTimestamp(Int64(Date().timeIntervalSince1970))
             return
         }
 
@@ -112,12 +129,12 @@ actor IncrementalSyncCoordinator {
         progressUpdates.send(SyncProgressUpdate(phase: .downloading, timestamp: Date()))
         try await downloadRemoteChanges(since: lastTs)
 
-        // 8. Advance lastSyncTimestamp to server-returned epoch
-        if serverTimestamp > 0 {
-            try await syncStateRepo.setLastSyncTimestamp(serverTimestamp)
-        }
-
-        progressUpdates.send(SyncProgressUpdate(phase: .idle, timestamp: Date()))
+        // 8. Advance lastSyncTimestamp. Prefer server-returned epoch; fall back to local
+        // wall-clock so the cursor still moves forward on successful download-only passes.
+        let effectiveTimestamp = serverTimestamp > 0
+            ? serverTimestamp
+            : Int64(Date().timeIntervalSince1970)
+        try await syncStateRepo.setLastSyncTimestamp(effectiveTimestamp)
     }
 
     // MARK: - Private

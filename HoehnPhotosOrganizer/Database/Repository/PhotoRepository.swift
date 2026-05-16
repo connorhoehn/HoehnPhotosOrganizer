@@ -112,12 +112,22 @@ actor PhotoRepository {
     }
 
     /// Fetch photos that have proxies ready but have never been face-indexed.
-    func fetchNeedingFaceIndex() async throws -> [PhotoAsset] {
+    ///
+    /// Ordered by `updated_at DESC` so the most recently proxy-ready photos are returned
+    /// first. This gives in-progress imports prompt face progress: when a new import
+    /// starts while a previous job's photos are still face-pending, the new photos jump
+    /// to the front of the queue instead of waiting in FIFO order.
+    ///
+    /// `limit` caps the per-call batch size so the face indexer's outer poll-loop can
+    /// re-query frequently and pick up new arrivals.
+    func fetchNeedingFaceIndex(limit: Int? = nil) async throws -> [PhotoAsset] {
         try await db.dbPool.read { db in
-            try PhotoAsset
+            var query = PhotoAsset
                 .filter(Column("processing_state") == ProcessingState.proxyReady.rawValue)
                 .filter(Column("face_indexed_at") == nil)
-                .fetchAll(db)
+                .order(Column("updated_at").desc)
+            if let limit { query = query.limit(limit) }
+            return try query.fetchAll(db)
         }
     }
 
@@ -149,12 +159,20 @@ actor PhotoRepository {
 
     // MARK: - Reads
 
-    func fetchAll() async throws -> [PhotoAsset] {
+    /// All non-hidden photos.
+    ///
+    /// **Defaults to library-committed photos only** (`import_status = 'library'`).
+    /// Staged photos (inside an open triage job) are excluded so callers in Library,
+    /// Search, Print Lab, Studio, Map, Activity feed, etc. never accidentally surface
+    /// in-flight imports. Pass `includingStaged: true` only from job/triage code paths
+    /// that legitimately need every photo regardless of commit state.
+    func fetchAll(includingStaged: Bool = false) async throws -> [PhotoAsset] {
         try await db.dbPool.read { db in
-            try PhotoAsset
-                .filter(Column("hidden_from_library") == false)
-                .order(Column("updated_at").desc)
-                .fetchAll(db)
+            var q = PhotoAsset.filter(Column("hidden_from_library") == false)
+            if !includingStaged {
+                q = q.filter(Column("import_status") == "library")
+            }
+            return try q.order(Column("updated_at").desc).fetchAll(db)
         }
     }
 
@@ -166,11 +184,18 @@ actor PhotoRepository {
 
     /// Fetch multiple PhotoAsset records by their IDs in a single read transaction.
     /// Preserves no particular order — caller is responsible for re-ranking if needed.
-    func fetchByIds(_ ids: [String]) async throws -> [PhotoAsset] {
+    ///
+    /// **Defaults to library-committed photos only** (`import_status = 'library'`).
+    /// IDs that resolve to staged photos are silently dropped from the result. Callers
+    /// in the Library / Search / Activity / Map / similarity-search paths get the safe
+    /// behavior for free. Pipelines that legitimately operate on staged photos (face
+    /// indexing) must pass `includingStaged: true`.
+    func fetchByIds(_ ids: [String], includingStaged: Bool = false) async throws -> [PhotoAsset] {
         guard !ids.isEmpty else { return [] }
         return try await db.dbPool.read { database -> [PhotoAsset] in
             let placeholders = ids.map { _ in "?" }.joined(separator: ", ")
-            let sql = "SELECT * FROM photo_assets WHERE id IN (\(placeholders))"
+            let staged = includingStaged ? "" : " AND import_status = 'library'"
+            let sql = "SELECT * FROM photo_assets WHERE id IN (\(placeholders))\(staged)"
             return try PhotoAsset.fetchAll(database, sql: sql, arguments: StatementArguments(ids))
         }
     }
@@ -256,11 +281,22 @@ actor PhotoRepository {
     /// Proxy/thumbnail files are also trashed if they exist.
     /// Call only after the user confirms — this is not easily undoable from within the app.
     func permanentlyDelete(ids: Set<String>) async throws {
-        // Fetch file paths before deleting records
+        // Fetch file paths + dependent face ids BEFORE the DB cascade nukes the rows.
+        // The face chip files don't auto-clean from the SQLite FK cascade.
         let assets = try await db.dbPool.read { conn in
             try PhotoAsset.filter(ids.contains(Column("id"))).fetchAll(conn)
         }
-        // Delete DB records
+        let faceIds: [String] = try await db.dbPool.read { conn in
+            guard !ids.isEmpty else { return [] }
+            let placeholders = ids.map { _ in "?" }.joined(separator: ",")
+            let rows = try Row.fetchAll(
+                conn,
+                sql: "SELECT id FROM face_embeddings WHERE photo_id IN (\(placeholders))",
+                arguments: StatementArguments(Array(ids))
+            )
+            return rows.map { $0["id"] as String }
+        }
+        // Delete DB records (face_embeddings cascade-deletes via FK on photo_id)
         try await db.dbPool.write { conn in
             for id in ids {
                 try conn.execute(sql: "DELETE FROM photo_assets WHERE id = ?", arguments: [id])
@@ -275,6 +311,11 @@ actor PhotoRepository {
                 .appendingPathComponent(baseName + ".jpg")
             try? FileManager.default.trashItem(at: proxyURL, resultingItemURL: nil)
         }
+        // Delete the face chips and drop in-memory cache entries for the affected faces
+        // so a same-id collision later (extremely unlikely with UUIDs but cheap insurance)
+        // doesn't surface a stale image.
+        FaceChipStore.deleteChips(faceIds: faceIds)
+        for id in faceIds { FaceCropCache.shared.evict(faceId: id) }
     }
 
     /// Bulk curation-state update — applies the same state to all IDs in a single write transaction.

@@ -125,14 +125,21 @@ actor SavedSearchRepository {
         }
 
         return try await db.dbPool.read { conn in
+            // Smart albums always scope to library-committed photos. A predicate-less
+            // saved search ("All Photos") would otherwise dump staged in-flight imports
+            // into the user's smart album results.
             let predicate = rule.sqlPredicate
             if predicate.isEmpty {
-                // No filters — return all photos
                 return try PhotoAsset
+                    .filter(Column("import_status") == "library")
                     .order(Column("updated_at").desc)
                     .fetchAll(conn)
             } else {
-                let sql = "SELECT * FROM photo_assets WHERE \(predicate) ORDER BY updated_at DESC"
+                let sql = """
+                    SELECT * FROM photo_assets
+                    WHERE (\(predicate)) AND import_status = 'library'
+                    ORDER BY updated_at DESC
+                """
                 return try PhotoAsset.fetchAll(conn, sql: sql)
             }
         }

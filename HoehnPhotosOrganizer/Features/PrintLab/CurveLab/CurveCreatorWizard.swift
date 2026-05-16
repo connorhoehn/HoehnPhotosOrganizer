@@ -81,6 +81,7 @@ struct CurveCreatorWizard: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.regular)
                         .disabled(!canAdvance)
+                        .help(canAdvance ? "Continue to the next step" : "Complete the required fields on this step to continue")
                     } else {
                         Button("Create Curve") {
                             viewModel.startNewEditSession(

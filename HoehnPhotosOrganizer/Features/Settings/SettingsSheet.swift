@@ -374,6 +374,7 @@ struct SettingsSheet: View {
                                 Button("Connect") { verifyPin() }
                                     .buttonStyle(.borderedProminent)
                                     .disabled(pinEntry.count != 4)
+                                    .help(pinEntry.count != 4 ? "Enter the 4-digit PIN to continue" : "Verify the PIN and connect to this peer")
                                 Button("Reject") {
                                     peerSync.rejectPin()
                                     pinEntry = ""
@@ -495,6 +496,7 @@ struct SettingsSheet: View {
                 Button("Save") { saveKey() }
                     .buttonStyle(.bordered)
                     .disabled(anthropicKey.isEmpty)
+                    .help(anthropicKey.isEmpty ? "Paste your Anthropic API key first" : "Save the API key to the Keychain")
 
                 Button {
                     testKey()
@@ -513,6 +515,7 @@ struct SettingsSheet: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(anthropicStatus == .unknown || isTesting)
+                .help(isTesting ? "Test in progress..." : (anthropicStatus == .unknown ? "Save a key before testing" : "Send a request to verify the key works"))
             }
 
             if !anthropicTestMessage.isEmpty {
@@ -576,6 +579,7 @@ struct SettingsSheet: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(db == nil)
+                    .help(db == nil ? "Waiting for database to initialize..." : "Re-run face detection across every photo from scratch")
                 }
             }
             .padding(16)
@@ -654,6 +658,7 @@ struct SettingsSheet: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(db == nil)
+                .help(db == nil ? "Waiting for database to initialize..." : "Find near-identical photos using Vision feature prints")
             }
             .padding(16)
             .background(
@@ -675,6 +680,7 @@ struct SettingsSheet: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(db == nil)
+                .help(db == nil ? "Waiting for database to initialize..." : "View storage totals by category and simulate drive consolidation")
             }
             .padding(16)
             .background(
@@ -706,6 +712,7 @@ struct SettingsSheet: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(db == nil)
+                .help(db == nil ? "Waiting for database to initialize..." : "Export all catalog data as a portable JSON Lines file")
             }
         }
         .padding(16)
